@@ -1,0 +1,6 @@
+name: astrbot_plugin_qwen_image
+display_name: Qwen 绘图（图生图）
+desc: 使用本地 Qwen-Image-2.1 工作流在 AstrBot 中做图生图编辑（换装/改表情/换背景/多图融合）。文生图正在开发中。
+version: "0.1.0"
+author: YayiMiko
+repo: "https://github.com/YayiMiko/astrbot_plugin_qwen_image"

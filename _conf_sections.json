@@ -1,0 +1,106 @@
+{
+  "sections": [
+    {
+      "key": "qwen_basic",
+      "description": "预设与恢复",
+      "hint": "用于恢复默认配置。",
+      "items": [
+        "reset_to_defaults"
+      ]
+    },
+    {
+      "key": "qwen_comfyui_connection",
+      "description": "ComfyUI 连接",
+      "hint": "用于连接 ComfyUI。通常请先用绘世启动器、ComfyUI portable 或自己的方式启动 ComfyUI；AstrBot 在服务器时请填写本机的局域网或 Tailscale 地址。只有 AstrBot 和 ComfyUI 同机时，才建议开启“由 AstrBot 启动 ComfyUI”。",
+      "items": [
+        "comfyui_base_url",
+        "workflow",
+        "timeout",
+        "poll_interval",
+        "auto_start",
+        "startup_command",
+        "startup_workdir",
+        "startup_visible_window",
+        "auto_start_admin_only",
+        "auto_start_allowed_sender_ids",
+        "startup_wait_seconds",
+        "startup_poll_interval"
+      ]
+    },
+    {
+      "key": "qwen_models",
+      "description": "模型文件",
+      "hint": "首次配置时请对照 ComfyUI 下拉框确认；这里只填文件名，不填路径。如果状态检查显示模型不可用，优先检查这里。",
+      "items": [
+        "unet_name",
+        "clip_name",
+        "vae_name"
+      ]
+    },
+    {
+      "key": "qwen_rendering",
+      "description": "出图参数",
+      "hint": "控制采样步数、CFG、采样器和调度器。Qwen-Image-2.1 默认 CFG 1.0；只有图中文字需要清晰时才提高 CFG 并填写负面提示词。",
+      "items": [
+        "allowed_sizes",
+        "steps",
+        "cfg",
+        "sampler_name",
+        "scheduler",
+        "negative_prompt"
+      ]
+    },
+    {
+      "key": "qwen_prompting",
+      "description": "提示词改写",
+      "hint": "Qwen-Image-2.1 使用自然语言描述而非 tag 串；改写器会把中文需求改写成一段英文画面描述，并套上“保持/修改”骨架。",
+      "items": [
+        "prompt_optimize_enabled",
+        "prompt_builder_provider_id",
+        "prompt_builder_max_tokens",
+        "prompt_mode",
+        "prompt_rewrite_system_prompt"
+      ]
+    },
+    {
+      "key": "qwen_editing",
+      "description": "图生图",
+      "hint": "第一张为改图目标，后面为参考图（换装/融合/风格参考），最多 3 张，多余会被截断并提示。",
+      "items": [
+        "img2img_enabled",
+        "max_image_side",
+        "slot_ttl_minutes"
+      ]
+    },
+    {
+      "key": "qwen_custom",
+      "description": "自定义工作流",
+      "hint": "给有 ComfyUI 经验的用户覆盖内置编辑图。先用 /qwen 验工作流 跑 8 步探针验证。",
+      "items": [
+        "custom_workflow_enabled",
+        "custom_workflow_path",
+        "custom_workflow_json"
+      ]
+    },
+    {
+      "key": "qwen_delivery",
+      "description": "发送与权限",
+      "hint": "控制图片是否发回聊天，以及哪些用户可以使用插件。",
+      "items": [
+        "send_result_to_chat",
+        "max_send_images",
+        "admin_only",
+        "allowed_sender_ids"
+      ]
+    },
+    {
+      "key": "qwen_debug",
+      "description": "排查问题",
+      "hint": "只在排查问题时临时开启，平时建议保持关闭。",
+      "items": [
+        "debug_image_reference_enabled",
+        "debug_send_payload_enabled"
+      ]
+    }
+  ]
+}

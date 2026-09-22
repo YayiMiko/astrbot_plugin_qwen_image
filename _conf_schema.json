@@ -1,0 +1,394 @@
+{
+  "qwen_basic": {
+    "description": "预设与恢复",
+    "type": "object",
+    "hint": "用于恢复默认配置。",
+    "items": {
+      "reset_to_defaults": {
+        "description": "一键恢复默认配置",
+        "type": "bool",
+        "default": false,
+        "hint": "打开后保存配置并重载插件，即会恢复默认值；恢复后此开关会自动关闭。"
+      }
+    }
+  },
+  "qwen_comfyui_connection": {
+    "description": "ComfyUI 连接",
+    "type": "object",
+    "hint": "用于连接 ComfyUI。通常请先用绘世启动器、ComfyUI portable 或自己的方式启动 ComfyUI；AstrBot 在服务器时请填写本机的局域网或 Tailscale 地址。只有 AstrBot 和 ComfyUI 同机时，才建议开启“由 AstrBot 启动 ComfyUI”。",
+    "items": {
+      "comfyui_base_url": {
+        "description": "ComfyUI 地址",
+        "type": "string",
+        "default": "http://127.0.0.1:8188",
+        "hint": "填写 AstrBot 能访问到的 ComfyUI API 服务地址，不是绘世启动器页面。同机通常用 http://127.0.0.1:8188；AstrBot 在服务器、ComfyUI 在本机时，请填写本机的局域网或 Tailscale 地址。"
+      },
+      "workflow": {
+        "description": "插件工作流类型",
+        "type": "string",
+        "default": "qwen21_edit",
+        "hint": "这是插件内置的工作流类型，不是 ComfyUI 里保存的工作流名称。当前保持默认即可。示例：qwen21_edit",
+        "collapsed": true
+      },
+      "timeout": {
+        "description": "单次生成超时（秒）",
+        "type": "int",
+        "default": 600,
+        "hint": "示例：600",
+        "collapsed": true
+      },
+      "poll_interval": {
+        "description": "生成状态查询间隔（秒）",
+        "type": "int",
+        "default": 2,
+        "hint": "示例：2",
+        "collapsed": true
+      },
+      "auto_start": {
+        "description": "由 AstrBot 启动 ComfyUI",
+        "type": "bool",
+        "default": false,
+        "hint": "高级选项，仅适合 AstrBot 和 ComfyUI 在同一台机器上时使用。服务器 AstrBot 无法直接启动你本机 Windows 上的 ComfyUI。默认关闭；关闭时请用绘世启动器、ComfyUI portable 或自己的方式先启动 ComfyUI。不是开机自启。",
+        "collapsed": true
+      },
+      "startup_command": {
+        "description": "启动命令（开启上项后必填）",
+        "type": "string",
+        "default": "",
+        "hint": "仅在开启“由 AstrBot 启动 ComfyUI”后必填。命令会在 AstrBot 所在机器执行；如果 AstrBot 跑在服务器容器里，这里不能填写本机 Windows 路径。",
+        "condition": {
+          "auto_start": true
+        }
+      },
+      "startup_workdir": {
+        "description": "启动工作目录",
+        "type": "string",
+        "default": "",
+        "hint": "示例：D:\\ComfyUI",
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        }
+      },
+      "startup_visible_window": {
+        "description": "启动时显示窗口",
+        "type": "bool",
+        "default": true,
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        }
+      },
+      "auto_start_admin_only": {
+        "description": "仅管理员可启动 ComfyUI",
+        "type": "bool",
+        "default": true,
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        }
+      },
+      "auto_start_allowed_sender_ids": {
+        "description": "允许启动的用户",
+        "type": "list",
+        "default": [],
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        },
+        "items": {
+          "type": "string"
+        },
+        "hint": "填写 QQ 号或 AstrBot 识别到的 sender_id；留空表示不限制。示例：123456789"
+      },
+      "startup_wait_seconds": {
+        "description": "等待 ComfyUI 就绪时间（秒）",
+        "type": "int",
+        "default": 120,
+        "hint": "示例：120",
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        }
+      },
+      "startup_poll_interval": {
+        "description": "ComfyUI 就绪检查间隔（秒）",
+        "type": "int",
+        "default": 3,
+        "hint": "示例：3",
+        "collapsed": true,
+        "condition": {
+          "auto_start": true
+        }
+      }
+    }
+  },
+  "qwen_models": {
+    "description": "模型文件",
+    "type": "object",
+    "hint": "首次配置时请对照 ComfyUI 下拉框确认；这里只填文件名，不填路径。如果状态检查显示模型不可用，优先检查这里。",
+    "items": {
+      "unet_name": {
+        "description": "主模型文件名",
+        "type": "string",
+        "default": "qwen_image_2.1_nvfp4.safetensors",
+        "hint": "首次配置时请确认它与 ComfyUI 下拉框中的文件名一致，不要填路径。示例：qwen_image_2.1_nvfp4.safetensors"
+      },
+      "clip_name": {
+        "description": "文本编码器文件名",
+        "type": "string",
+        "default": "qwen3vl_8b_nvfp4_heretic.safetensors",
+        "hint": "首次配置时请确认它与 ComfyUI 下拉框中的文件名一致，不要填路径。示例：qwen3vl_8b_nvfp4_heretic.safetensors"
+      },
+      "vae_name": {
+        "description": "VAE 文件名",
+        "type": "string",
+        "default": "qwen_image_2.1_vae_bf16.safetensors",
+        "hint": "首次配置时请确认它与 ComfyUI 下拉框中的文件名一致，不要填路径。示例：qwen_image_2.1_vae_bf16.safetensors"
+      }
+    }
+  },
+  "qwen_rendering": {
+    "description": "出图参数",
+    "type": "object",
+    "hint": "控制采样步数、CFG、采样器和调度器。Qwen-Image-2.1 默认 CFG 1.0；只有图中文字需要清晰时才提高 CFG 并填写负面提示词。",
+    "items": {
+      "allowed_sizes": {
+        "description": "可用尺寸列表",
+        "type": "list",
+        "default": [
+          "832x1216",
+          "896x1152",
+          "1024x1024",
+          "1152x896",
+          "1216x832"
+        ],
+        "hint": "格式为 宽x高，例如 1024x1024。改图输出尺寸跟随输入图；该列表仅用于状态展示。",
+        "collapsed": true,
+        "items": {
+          "type": "string"
+        }
+      },
+      "steps": {
+        "description": "采样步数",
+        "type": "int",
+        "default": 25,
+        "hint": "25 步快速出图，40 步终版质量。",
+        "collapsed": true
+      },
+      "cfg": {
+        "description": "CFG 强度",
+        "type": "float",
+        "default": 1.0,
+        "hint": "默认 1.0。只有图中密集文字需要清晰时才提高到 2.0–3.0，并填写负面提示词。",
+        "collapsed": true
+      },
+      "sampler_name": {
+        "description": "采样器",
+        "type": "string",
+        "default": "euler",
+        "hint": "当前工作流使用 euler。"
+      },
+      "scheduler": {
+        "description": "调度器",
+        "type": "string",
+        "default": "simple",
+        "hint": "当前工作流使用 simple。"
+      },
+      "negative_prompt": {
+        "description": "负面提示词",
+        "type": "string",
+        "default": "",
+        "hint": "CFG 1.0 时留空。提高 CFG 做文字渲染时建议填写 oversaturated, overexposed。",
+        "collapsed": true
+      }
+    }
+  },
+  "qwen_prompting": {
+    "description": "提示词改写",
+    "type": "object",
+    "hint": "Qwen-Image-2.1 使用自然语言描述而非 tag 串；改写器会把中文需求改写成一段英文画面描述，并套上“保持/修改”骨架。",
+    "items": {
+      "prompt_optimize_enabled": {
+        "description": "启用提示词改写",
+        "type": "bool",
+        "default": true,
+        "hint": "开启后，由语言模型把改图需求改写成适合 Qwen-Image-2.1 的英文段落。关闭后使用最小保持骨架直接发送。"
+      },
+      "prompt_builder_provider_id": {
+        "description": "改写模型",
+        "type": "string",
+        "default": "",
+        "hint": "留空使用当前会话主模型。只有想单独指定改写模型时再填写。",
+        "collapsed": true,
+        "condition": {
+          "prompt_optimize_enabled": true
+        }
+      },
+      "prompt_builder_max_tokens": {
+        "description": "改写模型输出上限",
+        "type": "int",
+        "default": 800,
+        "hint": "示例：800",
+        "collapsed": true,
+        "condition": {
+          "prompt_optimize_enabled": true
+        }
+      },
+      "prompt_mode": {
+        "description": "改写模式",
+        "type": "string",
+        "default": "auto",
+        "hint": "auto：高频需求走固定模板，其余走 LLM 改写；template_only：只用固定模板（省 token，命中失败用最小骨架直发）；llm_only：全部走 LLM 改写。",
+        "options": [
+          "auto",
+          "template_only",
+          "llm_only"
+        ],
+        "condition": {
+          "prompt_optimize_enabled": true
+        }
+      },
+      "prompt_rewrite_system_prompt": {
+        "description": "改写 system prompt",
+        "type": "string",
+        "default": "",
+        "hint": "留空使用内置改写规则。改坏了清空即可恢复内置。固定模板的措辞不在此列（见插件 README）。",
+        "editor_mode": true,
+        "editor_language": "plaintext",
+        "collapsed": true,
+        "condition": {
+          "prompt_optimize_enabled": true
+        }
+      }
+    }
+  },
+  "qwen_editing": {
+    "description": "图生图",
+    "type": "object",
+    "hint": "第一张为改图目标，后面为参考图（换装/融合/风格参考），最多 3 张，多余会被截断并提示。",
+    "items": {
+      "img2img_enabled": {
+        "description": "启用图生图 / 改图",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后改图指令会返回关闭提示，同时停用 qwen_edit LLM 工具。"
+      },
+      "max_image_side": {
+        "description": "输入图最长边",
+        "type": "int",
+        "default": 1024,
+        "hint": "超限输入会在上传前等比缩小，保护显存和排队时间。填 0 表示不缩小。示例：1024",
+        "collapsed": true,
+        "condition": {
+          "img2img_enabled": true
+        }
+      },
+      "slot_ttl_minutes": {
+        "description": "标记图有效期（分钟）",
+        "type": "int",
+        "default": 30,
+        "hint": "用 /qwen 记图 标记的参考图在此时间内有效，过期自动丢弃。示例：30",
+        "collapsed": true,
+        "condition": {
+          "img2img_enabled": true
+        }
+      }
+    }
+  },
+  "qwen_custom": {
+    "description": "自定义工作流",
+    "type": "object",
+    "hint": "给有 ComfyUI 经验的用户覆盖内置编辑图。自定义图必须遵守绑定契约（见插件 README）：LoadImage 节点按编号顺序接收目标图/参考图，第一个含 text 的编码节点收正向提示词，所有 SaveImage 前缀会被改写，seed 会被重随机。用 /qwen 验工作流 先跑 8 步探针验证。",
+    "items": {
+      "custom_workflow_enabled": {
+        "description": "使用自定义工作流",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后使用下方的工作流覆盖内置 qwen21_edit。关闭后使用插件内置工作流。"
+      },
+      "custom_workflow_path": {
+        "description": "自定义工作流 JSON 路径",
+        "type": "string",
+        "default": "",
+        "hint": "填写 AstrBot 能读取到的 ComfyUI API 工作流 JSON 路径（优先级高于下方内联 JSON）。服务器部署时这是服务器路径，不是本机 Windows 路径；也可以填写相对插件目录的路径。留空时不启用。示例：workflows/qwen_edit_api.json",
+        "collapsed": false,
+        "condition": {
+          "custom_workflow_enabled": true
+        }
+      },
+      "custom_workflow_json": {
+        "description": "自定义工作流 JSON（内联）",
+        "type": "string",
+        "default": "",
+        "hint": "把 ComfyUI 里“导出 API 格式”得到的 JSON 直接粘贴在这里。已填写上方路径时忽略本项。",
+        "editor_mode": true,
+        "editor_language": "json",
+        "collapsed": true,
+        "condition": {
+          "custom_workflow_enabled": true
+        }
+      }
+    }
+  },
+  "qwen_delivery": {
+    "description": "发送与权限",
+    "type": "object",
+    "hint": "控制图片是否发回聊天，以及哪些用户可以使用插件。",
+    "items": {
+      "send_result_to_chat": {
+        "description": "发送图片到聊天",
+        "type": "bool",
+        "default": true,
+        "hint": "关闭后只生成文件，不把图片发回聊天。"
+      },
+      "max_send_images": {
+        "description": "最多发送图片数",
+        "type": "int",
+        "default": 1,
+        "hint": "示例：1",
+        "collapsed": true,
+        "condition": {
+          "send_result_to_chat": true
+        }
+      },
+      "admin_only": {
+        "description": "仅管理员可用",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后只有 AstrBot 识别为管理员的用户可以使用。"
+      },
+      "allowed_sender_ids": {
+        "description": "用户白名单",
+        "type": "list",
+        "default": [],
+        "hint": "填写 QQ 号或 AstrBot 识别到的 sender_id；留空表示不限制。示例：123456789",
+        "collapsed": true,
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "qwen_debug": {
+    "description": "排查问题",
+    "type": "object",
+    "hint": "只在排查问题时临时开启，平时建议保持关闭。",
+    "items": {
+      "debug_image_reference_enabled": {
+        "description": "保存引用图解析日志",
+        "type": "bool",
+        "default": false,
+        "hint": "仅排查引用图问题时临时开启；平时建议关闭。",
+        "collapsed": true
+      },
+      "debug_send_payload_enabled": {
+        "description": "保存发送过程日志",
+        "type": "bool",
+        "default": false,
+        "hint": "仅排查未发图或发送失败时临时开启；平时建议关闭。",
+        "collapsed": true
+      }
+    }
+  }
+}
