@@ -5,8 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-import astrbot.api.message_components as Comp
-
 try:
     from .agent_tools.comfyui_workflows import MAX_EDIT_IMAGES
     from .command_router import help_text
@@ -166,17 +164,6 @@ class CommandActionHandler:
             for index, slot in enumerate(slots, start=1)
             if str(slot.get("path")) not in before
         ]
-        for index in new_indices:
-            path = slots[index - 1].get("path")
-            if path and Path(str(path)).is_file():
-                try:
-                    await event.send(
-                        event.chain_result(
-                            [Comp.Image.fromFileSystem(str(path))]
-                        )
-                    )
-                except Exception:
-                    pass
         if not new_indices:
             names = "、".join(
                 f"图{index}"
