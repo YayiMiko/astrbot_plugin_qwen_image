@@ -10,13 +10,23 @@ try:
     from .command_router import help_text
     from .config_defaults import persist_flat_config_key
     from .deployment_diagnostics import compact_status_text, diagnostic_text
-    from .image_slots import find_image_mentions, reorder_target_first, slot_key
+    from .image_slots import (
+        find_image_mentions,
+        reorder_target_first,
+        sanitize_session_key,
+        slot_key,
+    )
 except Exception:  # pragma: no cover - fallback for direct script-style imports.
     from agent_tools.comfyui_workflows import MAX_EDIT_IMAGES
     from command_router import help_text
     from config_defaults import persist_flat_config_key
     from deployment_diagnostics import compact_status_text, diagnostic_text
-    from image_slots import find_image_mentions, reorder_target_first, slot_key
+    from image_slots import (
+        find_image_mentions,
+        reorder_target_first,
+        sanitize_session_key,
+        slot_key,
+    )
 
 
 SCHEMA_PATH = Path(__file__).with_name("_conf_schema.json")
@@ -122,10 +132,11 @@ class CommandActionHandler:
         )
 
     def _slot_key(self, event: Any) -> str:
-        """Build the per-user slot key for an event.
+        """Build the slot key for an event.
 
-        Slots are scoped to session + sender so each user keeps an
-        independent set even in shared group chats.
+        Scope comes from config: `group` shares one slot set per session
+        (group chat default, preserves cross-user flows), `user` keeps an
+        independent set per sender.
 
         Args:
             event: AstrBot message event.
@@ -137,6 +148,9 @@ class CommandActionHandler:
             session = str(event.get_session_id() or "default")
         except Exception:
             session = "default"
+        scope = str(self.config.get("slot_scope") or "group").strip().lower()
+        if scope != "user":
+            return sanitize_session_key(session)
         try:
             sender = str(event.get_sender_id() or "unknown")
         except Exception:

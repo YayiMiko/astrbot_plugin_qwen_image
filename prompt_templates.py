@@ -91,7 +91,7 @@ _TEMPLATES: tuple[dict[str, object], ...] = (
         "name": "outfit",
         "keywords": ("换装", "换衣服", "穿上", "换上", "换件", "服装", "制服", "outfit"),
         "change": _outfit_change,
-        "fit": "the new outfit completely replaces the current clothing with accurate fabric texture and natural folds; do not keep any garment of the original outfit",
+        "fit": "reproduce the outfit from <image2> faithfully: the same garment, the same colours, the same pattern, the same details; do not keep any garment of the original outfit",
     },
     {
         "name": "expression",

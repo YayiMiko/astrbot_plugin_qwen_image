@@ -277,8 +277,22 @@
       "max_image_side": {
         "description": "输入图最长边",
         "type": "int",
-        "default": 1024,
-        "hint": "超限输入会在上传前等比缩小，保护显存和排队时间。填 0 表示不缩小。示例：1024",
+        "default": 0,
+        "hint": "超限输入会在上传前等比缩小。默认 0 表示不缩小（原生分辨率，换装细节保留最好）。显存不足或排队太慢时再设为 1024 或 1536。示例：0",
+        "collapsed": true,
+        "condition": {
+          "img2img_enabled": true
+        }
+      },
+      "slot_scope": {
+        "description": "标记图作用域",
+        "type": "string",
+        "default": "group",
+        "hint": "group：同会话（群）内所有用户共享一套标记图；user：每个用户独立一套。示例：group",
+        "options": [
+          "group",
+          "user"
+        ],
         "collapsed": true,
         "condition": {
           "img2img_enabled": true

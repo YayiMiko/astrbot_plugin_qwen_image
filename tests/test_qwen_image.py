@@ -316,6 +316,7 @@ def test_outfit_parenthetical_denoised() -> None:
     assert "(图" not in matched[1]
     assert "outfit from <image2>" in matched[1]
     assert "do not keep any garment" in matched[1]
+    assert "faithfully" in matched[1]
     matched = match_template("穿上红色礼服", 2)
     assert matched is not None
     assert "红色礼服" in matched[1]

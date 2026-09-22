@@ -69,7 +69,8 @@
       "items": [
         "img2img_enabled",
         "max_image_side",
-        "slot_ttl_minutes"
+        "slot_ttl_minutes",
+        "slot_scope"
       ]
     },
     {

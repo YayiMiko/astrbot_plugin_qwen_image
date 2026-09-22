@@ -149,7 +149,9 @@ class PromptPipeline:
                 "(<image2>). Describe the reference outfit garment by garment "
                 "(jacket, cape, hat, footwear, colours, materials) and name "
                 "those garments explicitly in the CHANGE clause instead of "
-                "writing only 'the outfit from <image2>'."
+                "writing only 'the outfit from <image2>'. Demand a faithful "
+                "reproduction: the same garment, the same colours, the same "
+                "pattern, the same details."
             )
         response = await self.context.llm_generate(
             chat_provider_id=provider_id,

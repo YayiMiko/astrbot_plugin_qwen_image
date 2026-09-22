@@ -56,7 +56,7 @@ DEFAULT_CONFIG = {
     "clip_name": "qwen3vl_8b_nvfp4_heretic.safetensors",
     "vae_name": "qwen_image_2.1_vae_bf16.safetensors",
     "negative_prompt": "",
-    "max_image_side": 1024,
+    "max_image_side": 0,
     "custom_workflow_enabled": False,
     "custom_workflow_path": "",
     "custom_workflow_json": "",
