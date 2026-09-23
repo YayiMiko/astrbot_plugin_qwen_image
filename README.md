@@ -40,7 +40,7 @@
 2. **LLM 改写**（其余一切）：插件 Agent 读取仓库内 `skills/qwen-image-21-prompt-expert/references/edit-policy.md` 作为默认 system prompt。根据输入图和用户语言写清编辑动作、图片分工与必要的保留项，不强制英文或把照片改成二次元。`改写模式` 可选 `auto` / `template_only` / `llm_only`；配置页的自定义 system prompt 会覆盖技能规则，清空可恢复内置。
 3. **原样直发**：`原样` / `无优化` 前缀跳过所有改写。
 
-Qwen-Image-2.1 使用自然语言编辑指令而非 tag 串。双图换装默认模板是工作流原有的英文段落；其他固定模板可能保留用户写下的中文细节。供 Codex 等 Agent 使用的完整入口在 `skills/qwen-image-21-prompt-expert/SKILL.md`，其共享编辑规则与插件 Agent 实际读取的是同一文件。当前只覆盖图生图；文生图规则留待后续开发。
+Qwen-Image-2.1 使用自然语言描述而非 tag 串。双图换装默认模板是工作流原有的英文段落；其他固定模板可能保留用户写下的中文细节。供 Codex 等 Agent 使用的完整入口在 `skills/qwen-image-21-prompt-expert/SKILL.md`，按无图文生图、单图编辑、多图参考读取不同规则。插件 Agent 当前仍只执行图生图，并读取该技能的共享编辑规则 `references/edit-policy.md`；技能具备文生图提示词能力不代表 `/qwen 生图` 已实现。
 
 ## 自定义工作流（给有 ComfyUI 经验的用户）
 

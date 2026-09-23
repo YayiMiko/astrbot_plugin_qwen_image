@@ -1,0 +1,17 @@
+# Text-to-image policy
+
+Use this only when the destination Qwen-Image 2.1 workflow receives **no** reference image. Describe the image that should exist, not an edit operation. A theme-only request is permission to develop a plausible composition, not to replace the named subject or add competing subjects.
+
+1. Identify the user's fixed facts: subjects and count, identity, action, specified objects, colours, text, style, and composition. Preserve these. Leave unspecified details open for artistic completion.
+2. Choose a medium once. For this user's default, describe an anime illustration with readable anatomy, coherent costume design, and anime-appropriate rendering. If the user requests a photograph, realistic environment, graphic design, watercolor, or another medium, follow that instead. Do not mix a photorealistic face into an anime subject unless requested.
+3. Turn the idea into a locatable frame: shot distance and viewpoint; where the main subject sits; foreground, middle ground, and background; the subject's visible pose and expression; relevant material, colour, and environmental details; one coherent source of light and its effect. Add details only when they reinforce the requested theme. Keep physical scale and interaction plausible.
+4. If the user wants legible words, quote the exact string in its original script and say where and how it appears. Do not invent extra signage, captions, labels, or slogans. If the exact wording is unknown, do not fabricate it.
+5. For sparse requests, supply enough setting and visual specificity to avoid a generic result. For already detailed requests, preserve them and avoid piling on unrelated props or redundant quality adjectives. Length is determined by scene complexity, not a fixed tag count or mandatory word count.
+
+The official Qwen T2I enhancer tends to write a detailed English description of the finished frame, with the aspect ratio in a separate field. For a copy-ready ComfyUI prompt, use English descriptive prose unless the user asks for another language; exact in-image text stays in the user's script. Use present-tense visual description rather than commands such as “draw” or “make sure.” Do not add `masterpiece`, `8K`, or a negative prompt by habit.
+
+If the caller needs a ratio, suggest it separately: preserve an explicit user ratio; otherwise choose from the composition (e.g. 2:3 for a standing full-body character, 3:2 for a horizontal scene, 1:1 for a centred icon). The local T2I workflow's aspect/megapixel selector must be set separately; a ratio written in prose will not change its saved setting. Avoid claiming that the prompt alone controls 2K output or transparent alpha.
+
+Before returning, check that the named subject and count remain correct, the action is visually depictable, the scene has a clear focal hierarchy, all requested visible text is exact, and the proposed setting has not displaced the user's core idea.
+
+Sources: [official T2I enhancer](https://github.com/QwenLM/Qwen-Image-2.1/blob/main/prompt_rewrite/prompts/system_prompt_t2i.txt), [official model guide](https://github.com/QwenLM/Qwen-Image-2.1), [ComfyUI T2I template](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json). Community [short-brief enhancer tests](https://www.reddit.com/r/StableDiffusion/comments/1wlvhya/qwen_image_21_pe_t2i_testing_diff_steps_mp/) are a useful trial, not a length rule.

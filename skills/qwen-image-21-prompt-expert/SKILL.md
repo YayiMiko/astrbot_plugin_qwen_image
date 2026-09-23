@@ -1,34 +1,24 @@
 ---
 name: qwen-image-21-prompt-expert
-description: Write or refine Qwen-Image 2.1 image-edit prompts from one or more reference images, including clothing transfer, local edits, style transfer, and reference-based scenes. Text-to-image prompting is not covered yet.
+description: Write Qwen-Image 2.1 prompts for text-to-image, single-image editing, and multi-image reference editing in ComfyUI or an agent workflow.
 ---
 
-# Qwen-Image 2.1 image editing
+# Qwen-Image 2.1 prompts
 
-Use this skill for image-to-image prompting only. Do not apply its edit-preservation rules to text-to-image work. Inspect the images when available; if they are unavailable, keep references to the source images and do not invent their appearance.
+Use natural-language descriptions, not Danbooru-style tag strings. Select the mode from the images actually supplied to the destination workflow, not merely from image names in the user's text:
 
-Read [the shared edit policy](references/edit-policy.md) before writing or rewriting an edit prompt. The AstrBot Qwen plugin also loads this exact policy as its default LLM system prompt, so changes to it affect both interactive agents and the plugin after deployment. A user-supplied custom plugin system prompt still overrides the default.
+- **No input image — text-to-image:** Read [the text-to-image policy](references/t2i-policy.md). Expand a short theme into a complete, coherent finished image. In this user's workspace, default to an anime illustration unless the request calls for another medium.
+- **One input image — single-image editing:** Read [the edit policy](references/edit-policy.md). Inspect the image when available. Name the change and preserve only the relevant unaffected content and the source medium.
+- **Two or more input images — multi-reference editing:** Read [the edit policy](references/edit-policy.md) and [the multi-reference guide](references/multi-reference.md). Make the role of each used image explicit; distinguish editing an existing canvas from composing a new scene from references.
 
-## Workflow fit
+If an image cannot be inspected, do not invent its appearance; refer to it by its image slot and ask for missing role information only when the task cannot be interpreted safely. Keep exact visible text in its requested script. An aspect ratio, resolution, mask, seed, or negative prompt belongs to workflow settings, not a magic phrase inside the image prompt. Return the prompt in the format the caller requests; otherwise give one copy-ready prompt and, only when useful, a separate short aspect-ratio suggestion. Do not silently invoke ComfyUI or claim a render was tested when only a prompt was written.
 
-- Follow the actual image-slot contract. In the AstrBot plugin, `<image1>` is the canvas/target and `<image2>`/`<image3>` are references; other Qwen-Image 2.1 workflows may offer more slots or different canvas placement.
-- For an unchanged-picture edit, preserve the input's medium and unedited content. Anime-first is a default only when creating a new scene without a style source; do not turn a photograph into anime by accident.
-- Return a copy-ready instruction, not Danbooru tags. Answer in the user's language unless they ask otherwise. Keep parameter advice outside the prompt, and only when useful.
-- Image editing is semantic generation, not a pixel-perfect layer operation. If the user needs exact boundaries or identity, suggest an appropriate mask, control, or verification step rather than promising a prompt can guarantee it.
+## This user's local workflows
 
-For the plugin's two-image outfit workflow, this tested minimal backbone is a useful starting point, not a mandatory wrapper for unrelated edits:
+- `Qwen-Image-2.1-文生图.json` is a separate ComfyUI text-to-image workflow with a connected aspect/megapixel selector, CFG 1, and 25 sampling steps. Prompt wording does not itself change the selector. Its saved example is anime, but that example is not a required character, costume, background, or style for future requests.
+- `Qwen-Image-2.1-图像编辑-双图参考.json` uses the first image as the canvas and later images as references. Its saved default follows the first image's aspect ratio, caps each reference at about 1 MiP, and uses CFG 1 / 25 steps. The AstrBot `/qwen` editor currently accepts up to three images, uses `<image1>` as target and `<image2>`/`<image3>` as references, and has a configurable 1 MiP cap. Verify a different workflow's slot order instead of assuming these roles globally.
+- The current AstrBot plugin implements image editing only. This skill can prepare a text-to-image prompt for the local ComfyUI workflow or a future agent, but it does **not** enable `/qwen` text-to-image by itself.
 
-```text
-Put the clothing from <image2> onto the character in <image1>, replacing the outfit they are currently wearing. Keep the character's face, hairstyle, body shape and pose exactly as they appear in <image1>. Reproduce the clothing from <image2> faithfully: the same garment, the same colours, the same pattern, the same details. The clothing should fit the character's body naturally, with correct proportions, believable fabric drape and natural folds at the shoulders, elbows and waist. Keep the original background, camera angle, lighting and art style of <image1> unchanged.
-```
+## Evidence and limits
 
-This is an English example from the user's working ComfyUI workflow; a Chinese request may be rewritten in Chinese. Do not copy its preserve clauses when the user deliberately changes pose, background, or style.
-
-## Evidence
-
-- [Qwen-Image-2.1 official edit prompt enhancer](https://github.com/QwenLM/Qwen-Image-2.1/blob/main/prompt_rewrite/prompts/system_prompt_edit.txt): operation-first edits, image-grounded details, explicit multi-image markers and roles, preservation without over-description, and language handling.
-- [Qwen-Image-2.1 official repository](https://github.com/QwenLM/Qwen-Image-2.1): multi-reference and local-edit capabilities.
-- [ComfyUI official image-edit template](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json): two-image clothing example, image-slot and output-size behavior, CFG 1 default.
-- [Recent ComfyUI community edit examples](https://www.reddit.com/r/StableDiffusion/comments/1wlt9t9/qwen_image_21_edit_tips/): concise pose, texture, lighting, and style-transfer requests explicitly name the source and target images. Treat these as anecdotal tests, not model guarantees.
-
-Community examples are useful hypotheses, not guarantees; prefer the current workflow's actual slot contract and output over a prompt recipe copied from another model version.
+[Qwen's official 2.1 repository](https://github.com/QwenLM/Qwen-Image-2.1) distinguishes T2I and editing prompt enhancers and documents multi-reference editing. Its [T2I rewrite prompt](https://github.com/QwenLM/Qwen-Image-2.1/blob/main/prompt_rewrite/prompts/system_prompt_t2i.txt) describes the finished frame and returns a separate ratio; its [edit rewrite prompt](https://github.com/QwenLM/Qwen-Image-2.1/blob/main/prompt_rewrite/prompts/system_prompt_edit.txt) grounds changes in the input images. The [official ComfyUI T2I](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_t2i.json) and [edit](https://github.com/Comfy-Org/workflow_templates/blob/main/templates/image_qwen_image_2_1_image_edit.json) templates show that sizes and image slots are workflow properties. Community [T2I enhancer tests](https://www.reddit.com/r/StableDiffusion/comments/1wlvhya/qwen_image_21_pe_t2i_testing_diff_steps_mp/) and [edit examples](https://www.reddit.com/r/StableDiffusion/comments/1wlt9t9/qwen_image_21_edit_tips/) support trying fuller scene descriptions and explicit source/target roles, but are anecdotal rather than guarantees. Do not impose the official enhancer's fixed long-output format or word count on every user request.
