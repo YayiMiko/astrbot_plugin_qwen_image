@@ -154,6 +154,7 @@ def test_cli_agent_defaults_match_validated_models() -> None:
     assert COMFYUI_AGENT_DEFAULT_CONFIG["output_size_mode"] == "aspect"
     assert COMFYUI_AGENT_DEFAULT_CONFIG["output_aspect"] == "4:3"
     assert COMFYUI_AGENT_DEFAULT_CONFIG["output_megapixels"] == 1.0
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["single_image_size_mode"] == "target"
 
 
 def test_cli_agent_flattens_qwen_grouped_config() -> None:
@@ -280,8 +281,8 @@ def test_template_tier_hit_without_llm() -> None:
         pipeline.build(None, "把背景换成黄昏海滩", mode="img2img", image_count=1)
     )
     assert result.summary.get("tier") == "template:background"
-    assert "supplied target image" in result.final_prompt
-    assert "Preserve all untargeted content" in result.final_prompt
+    assert "背景替换为黄昏海滩" in result.final_prompt
+    assert "保留前景主体" in result.final_prompt
     assert "黄昏海滩" in result.final_prompt
     assert "1girl" not in result.final_prompt
     assert result.summary.get("llm_used") is False
@@ -416,6 +417,52 @@ def test_template_table_covers_skill_types() -> None:
     matched = match_template("发色改成银色", 1)
     assert matched is not None and matched[0] == "hair"
     assert match_template("随便聊聊今晚吃啥", 1) is None
+
+
+def test_templates_defer_negated_compound_and_multireference_edits() -> None:
+    assert match_template("不要改背景", 1) is None
+    assert match_template("换背景并穿上红裙", 1) is None
+    assert match_template("把背景换成海滩，保留人物", 1) is None
+    assert match_template("把背景换成海滩", 2) is None
+    assert match_template("更加强烈的光线", 1) is None
+    assert match_template("换装", 1) is None
+    assert match_template("换衣服", 1) is None
+    assert match_template("背景加入一棵树", 1) is None
+    assert match_template("change the background to a beach", 1) is None
+
+
+def test_compound_edit_reaches_vision_rewriter() -> None:
+    import types
+
+    calls = {}
+
+    class _VisionContext:
+        async def llm_generate(self, **kwargs):
+            calls.update(kwargs)
+            return types.SimpleNamespace(
+                completion_text="同时更换背景和服装，保留人物身份。"
+            )
+
+    pipeline = _pipeline(context=_VisionContext())
+    result = asyncio.run(
+        pipeline.build(
+            None,
+            "把背景换成海滩，同时穿上红裙",
+            image_count=1,
+            image_paths=["target.png"],
+        )
+    )
+    assert result.summary["tier"] == "llm"
+    assert calls["image_urls"] == ["target.png"]
+    assert result.final_prompt == "同时更换背景和服装，保留人物身份。"
+
+
+def test_single_image_templates_keep_user_language_and_specific_change() -> None:
+    assert "表情改为微笑" in match_template("改成微笑表情", 1)[1]
+    assert "发色改为银色" in match_template("发色改成银色", 1)[1]
+    assert "人物坐下" in match_template("让她坐下", 1)[1]
+    assert "添加一顶帽子" in match_template("给她加一顶帽子", 1)[1]
+    assert "水彩风格" in match_template("画成水彩风格", 1)[1]
 
 
 def test_find_image_mentions() -> None:
@@ -664,6 +711,26 @@ def test_build_edit_workflow_dispatch() -> None:
 def test_resolve_output_size() -> None:
     assert resolve_output_size({}) is None
     assert resolve_output_size({"output_size_mode": "target"}) is None
+    assert (
+        resolve_output_size(
+            {
+                "output_size_mode": "aspect",
+                "output_aspect": "4:3",
+                "output_megapixels": 1.0,
+            },
+            image_count=1,
+        )
+        is None
+    )
+    assert resolve_output_size(
+        {
+            "output_size_mode": "target",
+            "single_image_size_mode": "configured",
+            "output_aspect": "4:3",
+            "output_megapixels": 1.0,
+        },
+        image_count=1,
+    ) == (1152, 864)
     assert resolve_output_size(
         {
             "output_size_mode": "aspect",

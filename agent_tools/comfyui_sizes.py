@@ -80,18 +80,26 @@ SIZE_MULTIPLE = 32
 
 def resolve_output_size(
     config: dict[str, Any],
+    image_count: int = 2,
 ) -> tuple[int, int] | None:
     """Resolve a forced output size from aspect + megapixel settings.
 
     Args:
         config: Plugin configuration with `output_size_mode`,
-            `output_aspect`, and `output_megapixels`.
+            `single_image_size_mode`, `output_aspect`, and `output_megapixels`.
+        image_count: Number of reference images supplied to the edit workflow.
 
     Returns:
         (width, height) snapped down to multiples of 32, or None when the
         output should follow the target image (`target` mode or bad config).
     """
-    mode = str(config.get("output_size_mode") or "target").strip().lower()
+    mode = (
+        str(config.get("single_image_size_mode") or "target").strip().lower()
+        if image_count == 1
+        else str(config.get("output_size_mode") or "target").strip().lower()
+    )
+    if image_count == 1 and mode == "configured":
+        mode = "aspect"
     if mode != "aspect":
         return None
     aspect = str(config.get("output_aspect") or "").strip()

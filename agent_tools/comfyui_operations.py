@@ -33,7 +33,7 @@ def edit_payload(
     cfg = float(args.cfg or config.get("cfg", 1.0))
     seed = int(args.seed if args.seed is not None else random.randint(1, 2**32 - 1))
     negative_prompt = str(args.negative_prompt or config.get("negative_prompt", ""))
-    output_size = resolve_output_size(config)
+    output_size = resolve_output_size(config, len(kept))
     try:
         prompt_body = build_edit_workflow(
             config, prompt, uploaded, steps, cfg, seed, negative_prompt, output_size

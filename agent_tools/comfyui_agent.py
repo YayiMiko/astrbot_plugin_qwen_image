@@ -42,6 +42,7 @@ DEFAULT_CONFIG = {
     "output_size_mode": "aspect",
     "output_aspect": "4:3",
     "output_megapixels": 1.0,
+    "single_image_size_mode": "target",
     "timeout": 600,
     "poll_interval": 2,
     "allowed_sizes": [
