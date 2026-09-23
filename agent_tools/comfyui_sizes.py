@@ -62,3 +62,51 @@ def generation_size(
             ),
         )
     return width, height
+
+
+OUTPUT_ASPECTS = {
+    "1:1": (1, 1),
+    "3:4": (3, 4),
+    "4:3": (4, 3),
+    "2:3": (2, 3),
+    "3:2": (3, 2),
+    "9:16": (9, 16),
+    "16:9": (16, 9),
+}
+
+#: Latent grid alignment, mirroring the UI node's 倍数 control.
+SIZE_MULTIPLE = 32
+
+
+def resolve_output_size(
+    config: dict[str, Any],
+) -> tuple[int, int] | None:
+    """Resolve a forced output size from aspect + megapixel settings.
+
+    Args:
+        config: Plugin configuration with `output_size_mode`,
+            `output_aspect`, and `output_megapixels`.
+
+    Returns:
+        (width, height) snapped down to multiples of 32, or None when the
+        output should follow the target image (`target` mode or bad config).
+    """
+    mode = str(config.get("output_size_mode") or "target").strip().lower()
+    if mode != "aspect":
+        return None
+    aspect = str(config.get("output_aspect") or "").strip()
+    ratio = OUTPUT_ASPECTS.get(aspect)
+    if ratio is None:
+        return None
+    try:
+        megapixels = float(config.get("output_megapixels", 1.0))
+    except (TypeError, ValueError):
+        return None
+    if megapixels <= 0:
+        return None
+    ar_w, ar_h = ratio
+    width = int((megapixels * 1_000_000 * ar_w / ar_h) ** 0.5)
+    height = int((megapixels * 1_000_000 * ar_h / ar_w) ** 0.5)
+    width = max(SIZE_MULTIPLE, (width // SIZE_MULTIPLE) * SIZE_MULTIPLE)
+    height = max(SIZE_MULTIPLE, (height // SIZE_MULTIPLE) * SIZE_MULTIPLE)
+    return width, height

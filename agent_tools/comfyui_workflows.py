@@ -34,6 +34,7 @@ def qwen21_edit_workflow(
     cfg: float,
     seed: int,
     negative_prompt: str = "",
+    output_size: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """Build the Qwen-Image-2.1 reference-edit workflow graph.
 
@@ -48,6 +49,9 @@ def qwen21_edit_workflow(
         seed: Random seed.
         negative_prompt: Negative prompt, normally empty. Only meaningful
             when cfg is raised for text rendering.
+        output_size: Optional forced (width, height) for the output latent.
+            When set, the target image is rescaled (center-crop fill) before
+            VAE encoding; otherwise the output follows the target image.
 
     Returns:
         ComfyUI API-format prompt graph.
@@ -116,7 +120,7 @@ def qwen21_edit_workflow(
         },
         "30": {
             "class_type": "VAEEncode",
-            "inputs": {"pixels": ["10", 0], "vae": ["15", 0]},
+            "inputs": {"pixels": ["25", 0] if output_size else ["10", 0], "vae": ["15", 0]},
         },
         "19": {
             "class_type": "KSampler",
@@ -145,6 +149,18 @@ def qwen21_edit_workflow(
         },
     }
     graph.update(load_nodes)
+    if output_size:
+        width, height = output_size
+        graph["25"] = {
+            "class_type": "ImageScale",
+            "inputs": {
+                "image": ["10", 0],
+                "upscale_method": "lanczos",
+                "width": int(width),
+                "height": int(height),
+                "crop": "center",
+            },
+        }
     return graph
 
 
@@ -156,6 +172,7 @@ def build_edit_workflow(
     cfg: float,
     seed: int,
     negative_prompt: str = "",
+    output_size: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
     """Build the effective edit graph (built-in or custom).
 
@@ -168,6 +185,8 @@ def build_edit_workflow(
         seed: Random seed.
         negative_prompt: Negative prompt (custom graphs only use it when a
             negative text node exists).
+        output_size: Forced output size for the built-in graph. Custom
+            graphs manage their own topology and ignore this.
 
     Returns:
         ComfyUI API-format prompt graph.
@@ -183,7 +202,7 @@ def build_edit_workflow(
     if workflow_name not in BUILTIN_EDIT_WORKFLOWS:
         raise ValueError(f"unsupported_workflow: {workflow_name}")
     return qwen21_edit_workflow(
-        config, prompt, image_names, steps, cfg, seed, negative_prompt
+        config, prompt, image_names, steps, cfg, seed, negative_prompt, output_size
     )
 
 

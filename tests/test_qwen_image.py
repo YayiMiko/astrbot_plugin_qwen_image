@@ -16,6 +16,7 @@ from agent_tools.comfyui_agent import (  # noqa: E402
     ROOT as COMFYUI_AGENT_ROOT,
 )
 from agent_tools.comfyui_agent import _flatten_config as flatten_agent_config  # noqa: E402
+from agent_tools.comfyui_sizes import resolve_output_size  # noqa: E402
 from agent_tools.comfyui_workflows import (  # noqa: E402
     MAX_EDIT_IMAGES,
     build_edit_workflow,
@@ -622,10 +623,55 @@ def test_build_edit_workflow_dispatch() -> None:
 
     builtin = build_edit_workflow(_config(), "p", ["a.png"], 25, 1.0, 1)
     assert builtin["9"]["inputs"]["filename_prefix"] == "astrbot/qwen"
+    assert "25" not in builtin
     with pytest.raises(ValueError, match="unsupported_workflow"):
         build_edit_workflow(
             dict(_config(), workflow="qwen21_t2i"), "p", ["a.png"], 25, 1.0, 1
         )
+
+
+def test_resolve_output_size() -> None:
+    assert resolve_output_size({}) is None
+    assert resolve_output_size({"output_size_mode": "target"}) is None
+    assert resolve_output_size(
+        {
+            "output_size_mode": "aspect",
+            "output_aspect": "3:4",
+            "output_megapixels": 1.0,
+        }
+    ) == (864, 1152)
+    assert resolve_output_size(
+        {"output_size_mode": "aspect", "output_aspect": "1:1", "output_megapixels": 1.0}
+    ) == (992, 992)
+    assert (
+        resolve_output_size(
+            {"output_size_mode": "aspect", "output_aspect": "9:99", "output_megapixels": 1.0}
+        )
+        is None
+    )
+    assert (
+        resolve_output_size(
+            {"output_size_mode": "aspect", "output_aspect": "3:4", "output_megapixels": 0}
+        )
+        is None
+    )
+
+
+def test_edit_workflow_forced_output_size() -> None:
+    workflow = qwen21_edit_workflow(
+        _config(), "p", ["t.png"], 25, 1.0, 1, output_size=(864, 1152)
+    )
+    assert workflow["25"] == {
+        "class_type": "ImageScale",
+        "inputs": {
+            "image": ["10", 0],
+            "upscale_method": "lanczos",
+            "width": 864,
+            "height": 1152,
+            "crop": "center",
+        },
+    }
+    assert workflow["30"]["inputs"] == {"pixels": ["25", 0], "vae": ["15", 0]}
 
 
 def test_check_commands_removed_from_chat() -> None:

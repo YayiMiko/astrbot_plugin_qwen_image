@@ -7,6 +7,7 @@ from typing import Any
 
 from comfyui_history import ComfyUIHistoryRunner, history_failed
 from comfyui_http import ComfyUIHttpClient
+from comfyui_sizes import resolve_output_size
 from comfyui_workflows import MAX_EDIT_IMAGES, build_edit_workflow
 from PIL import Image, ImageOps
 
@@ -32,9 +33,10 @@ def edit_payload(
     cfg = float(args.cfg or config.get("cfg", 1.0))
     seed = int(args.seed if args.seed is not None else random.randint(1, 2**32 - 1))
     negative_prompt = str(args.negative_prompt or config.get("negative_prompt", ""))
+    output_size = resolve_output_size(config)
     try:
         prompt_body = build_edit_workflow(
-            config, prompt, uploaded, steps, cfg, seed, negative_prompt
+            config, prompt, uploaded, steps, cfg, seed, negative_prompt, output_size
         )
     except ValueError as exc:
         return {
@@ -64,6 +66,7 @@ def edit_payload(
         "seed": seed,
         "steps": steps,
         "cfg": cfg,
+        "output_size": list(output_size) if output_size else None,
         "outputs": [str(path) for path in outputs],
         "raw_image_count": raw_image_count,
         "error": None if outputs else "no image found in history",

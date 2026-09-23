@@ -47,6 +47,9 @@
         "cfg",
         "sampler_name",
         "scheduler",
+        "output_size_mode",
+        "output_aspect",
+        "output_megapixels",
         "negative_prompt"
       ]
     },
