@@ -45,9 +45,21 @@ from prompt_templates import (  # noqa: E402
 )
 from prompt_pipeline import (  # noqa: E402
     EDIT_FALLBACK_SKELETON,
+    QWEN_REWRITE_SYSTEM_PROMPT,
     PromptPipeline,
     strip_raw_prefix,
 )
+
+
+def test_default_rewriter_loads_bundled_edit_skill() -> None:
+    policy = (
+        PLUGIN_DIR
+        / "skills"
+        / "qwen-image-21-prompt-expert"
+        / "references"
+        / "edit-policy.md"
+    )
+    assert QWEN_REWRITE_SYSTEM_PROMPT == policy.read_text(encoding="utf-8").strip()
 
 
 def _config(**overrides):
@@ -249,8 +261,8 @@ def test_fallback_skeleton_preserves_target_without_llm() -> None:
     pipeline = _pipeline(prompt_optimize_enabled=False)
     result = asyncio.run(pipeline.build(None, "换上红裙", mode="img2img"))
     assert result.final_prompt == EDIT_FALLBACK_SKELETON.format(change="换上红裙")
-    assert "<image1>" in result.final_prompt
-    assert "preserve" in result.final_prompt
+    assert "supplied target image" in result.final_prompt
+    assert "Preserve its identity" in result.final_prompt
     assert "1girl" not in result.final_prompt
     assert result.summary["llm_used"] is False
 
@@ -268,8 +280,8 @@ def test_template_tier_hit_without_llm() -> None:
         pipeline.build(None, "把背景换成黄昏海滩", mode="img2img", image_count=1)
     )
     assert result.summary.get("tier") == "template:background"
-    assert "<image1>" in result.final_prompt
-    assert "preserve the original" in result.final_prompt
+    assert "supplied target image" in result.final_prompt
+    assert "Preserve all untargeted content" in result.final_prompt
     assert "黄昏海滩" in result.final_prompt
     assert "1girl" not in result.final_prompt
     assert result.summary.get("llm_used") is False
@@ -361,8 +373,9 @@ def test_vision_outfit_routing_passes_images() -> None:
     )
     assert result.summary.get("tier") == "llm:vision"
     assert calls["image_urls"] == ["target.png", "ref.png"]
-    assert "garment by garment" in calls["prompt"]
+    assert "distinctive garments and details you can actually see" in calls["prompt"]
     assert TWO_IMAGE_OUTFIT_PROMPT in calls["prompt"]
+    assert calls["system_prompt"] == QWEN_REWRITE_SYSTEM_PROMPT
     assert "white military jacket" in result.final_prompt
 
 

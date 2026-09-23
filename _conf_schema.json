@@ -246,13 +246,13 @@
   "qwen_prompting": {
     "description": "提示词改写",
     "type": "object",
-    "hint": "Qwen-Image-2.1 使用自然语言描述而非 tag 串；改写器会把中文需求改写成一段英文画面描述，并套上“保持/修改”骨架。",
+    "hint": "Qwen-Image-2.1 使用自然语言编辑指令而非 tag 串；默认规则来自插件内置图生图技能，依据图片和用户需求确定修改与保留内容。",
     "items": {
       "prompt_optimize_enabled": {
         "description": "启用提示词改写",
         "type": "bool",
         "default": true,
-        "hint": "开启后，由语言模型把改图需求改写成适合 Qwen-Image-2.1 的英文段落。关闭后使用最小保持骨架直接发送。"
+        "hint": "开启后，由语言模型按图生图技能改写需求，通常沿用用户语言。关闭后使用简短保持骨架直接发送。"
       },
       "prompt_builder_provider_id": {
         "description": "改写模型",

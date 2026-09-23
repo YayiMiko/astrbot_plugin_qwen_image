@@ -1,14 +1,9 @@
-"""Qwen-Image-2.1 prompt rewriting pipeline.
-
-Qwen-Image-2.1 was trained on natural-language captions, not tag soup, so
-this pipeline deliberately does the opposite of the Danbooru tag pipelines
-used by sibling plugins: it asks an LLM to rewrite the user request into one
-English descriptive paragraph, wrapped in the edit preserve-skeleton.
-"""
+"""Ground image-edit requests in the shared Qwen-Image-2.1 edit skill."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 try:
@@ -16,34 +11,21 @@ try:
 except ImportError:  # pragma: no cover - fallback for direct script-style imports.
     from prompt_templates import TWO_IMAGE_OUTFIT_PROMPT, match_template
 
-QWEN_REWRITE_SYSTEM_PROMPT = """You are the prompt rewriter for Qwen-Image-2.1, a 7.1B single-stream DiT that does reference editing. It was trained on natural-language captions, NOT on booru tags.
-
-HARD RULES:
-- NEVER output booru tags (no "1girl", "solo", "masterpiece, best quality"). Describe the picture in sentences.
-- Output ONE English paragraph: main subject, what they wear/hold, environment, lighting, finer detail, in that order.
-- Roughly a third of sentences must open with a positional phrase ("On the right side of the frame, ...", "Across the lower third, ...").
-- STATE, never instruct: report what is in the frame. Never echo job instructions (no "4K", "sharp", "no noise" as commands; "sharp details" phrasing is fine).
-- Split the request into FIXED (text strings to render, named characters, counts, colours, style/outfit the user stated) and OPEN (everything else you invent). Never silently change a FIXED item.
-- Default target is anime (二次元): anime illustration, cel-shaded, clean lineart, flat vibrant colours, unless the user asked for photoreal/realistic/真人/写实, in which case use photorealistic with natural skin texture and realistic materials.
-- Named characters: state canonical features explicitly (hair colour/length/style, eye colour, signature outfit).
-- Text inside the image: only render text the user actually supplied, quoted character-for-character in double quotes, in its own script. Never invent signage.
-
-EDIT MODE (the request edits supplied images):
-- <image1> is ALWAYS the edit target. <image2>/<image3> are references (outfit, character, style, ...).
-- For clothing transfer from <image2>, follow the supplied two-image outfit template instead of the generic skeleton; preserve <image1>'s art style as well as its identity, pose, framing, background and lighting.
-- Every edit prompt MUST state what stays and what changes, using this skeleton:
-  Keep the character and pose in <image1> unchanged, [CHANGE], preserve the original facial features, hair, body shape and pose, [FIT/REALISM clause], keep the original background and original lighting, [STYLE anchor], sharp details
-- Map the user's image mentions (图一/图二/图三, 第一张/第二张, image 1/2, quoted images, staged slots) onto <image1>/<image2>/<image3>. The first supplied image is <image1>.
-- Spell out the preserve-list explicitly. Vague edit prompts drift; when in doubt, preserve more.
-
-OUTPUT: only the finished English paragraph. No titles, no explanations, no Markdown, no JSON, no Chinese.
-"""
+QWEN_REWRITE_SYSTEM_PROMPT = (
+    (
+        Path(__file__).resolve().parent
+        / "skills"
+        / "qwen-image-21-prompt-expert"
+        / "references"
+        / "edit-policy.md"
+    )
+    .read_text(encoding="utf-8")
+    .strip()
+)
 
 EDIT_FALLBACK_SKELETON = (
-    "Keep the character and pose in <image1> unchanged, {change}, preserve "
-    "the original facial features, hair, body shape and pose, keep the "
-    "original background and original lighting, clean anime illustration, "
-    "cel-shaded, sharp details"
+    "Edit the supplied target image as requested: {change}. Preserve its identity, original "
+    "visual medium, and all content not targeted by this change."
 )
 
 RAW_PREFIXES = ("原样", "无优化", "raw:")
@@ -145,12 +127,9 @@ class PromptPipeline:
             llm_prompt += (
                 "\nLook at the attached images: the FIRST image is the edit "
                 "target (<image1>), the SECOND image is the outfit reference "
-                "(<image2>). Describe the reference outfit garment by garment "
-                "(jacket, cape, hat, footwear, colours, materials) and name "
-                "those garments explicitly in the CHANGE clause instead of "
-                "writing only 'the outfit from <image2>'. Demand a faithful "
-                "reproduction: the same garment, the same colours, the same "
-                "pattern, the same details."
+                "(<image2>). Name the distinctive garments and details you "
+                "can actually see when they help a faithful transfer; do not "
+                "invent hidden parts, materials, or accessories."
             )
             llm_prompt += (
                 "\nUse this validated two-image outfit prompt as the backbone, "

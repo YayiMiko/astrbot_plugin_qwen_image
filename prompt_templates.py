@@ -11,10 +11,8 @@ from __future__ import annotations
 import re
 
 TEMPLATE_SKELETON = (
-    "Keep the character and pose in <image1> unchanged, {change}, preserve "
-    "the original facial features, hair, body shape and pose, {fit}, keep "
-    "the original background and original lighting, clean anime "
-    "illustration, cel-shaded, sharp details"
+    "Edit the supplied target image: {change}. Preserve all untargeted "
+    "content and visual qualities; {fit}."
 )
 
 # The default outfit prompt from the validated two-image ComfyUI workflow.
