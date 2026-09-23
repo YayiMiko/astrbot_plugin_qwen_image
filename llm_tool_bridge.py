@@ -59,4 +59,8 @@ class LLMToolBridge:
         Returns:
             Edit result summary.
         """
-        return await self._edit(event, prompt)
+        result = await self._edit(event, prompt)
+        return (
+            result
+            or "The image or error message was already sent to chat. Do not repeat it."
+        )

@@ -48,6 +48,8 @@
         "sampler_name",
         "scheduler",
         "output_size_mode",
+        "single_image_size_mode",
+        "limit_image_megapixels",
         "output_aspect",
         "output_megapixels",
         "negative_prompt"

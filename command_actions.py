@@ -179,11 +179,14 @@ class CommandActionHandler:
             if str(slot.get("path")) not in before
         ]
         if not new_indices:
-            names = "、".join(
-                f"图{index}"
-                for index, slot in enumerate(slots, start=1)
-                if str(slot.get("path")) in {str(path) for path in image_paths}
-            ) or "已标记的图"
+            names = (
+                "、".join(
+                    f"图{index}"
+                    for index, slot in enumerate(slots, start=1)
+                    if str(slot.get("path")) in {str(path) for path in image_paths}
+                )
+                or "已标记的图"
+            )
             return (
                 f"这几张已经标记过了（{names}），不用重发。"
                 "用 /qwen 看图 查看全部已标记参考图。"
@@ -232,23 +235,31 @@ class CommandActionHandler:
         """
         slots = self._slot_store.read(self._slot_key(event))
         if not slots:
-            return [], [], (
-                "提到了图一/图二，但当前没有已标记的参考图。"
-                "先用 /qwen 记图 标记（附图或引用图片），或用 /qwen 看图 确认。"
+            return (
+                [],
+                [],
+                (
+                    "提到了图一/图二，但当前没有已标记的参考图。"
+                    "先用 /qwen 记图 标记（附图或引用图片），或用 /qwen 看图 确认。"
+                ),
             )
         mentions = [n for n in find_image_mentions(prompt) if 1 <= n <= MAX_EDIT_IMAGES]
         if not mentions:
             mentions = list(range(1, len(slots) + 1))
         missing = [n for n in mentions if n > len(slots)]
         if missing:
-            return [], [], (
-                f"图{missing[0]}没有标记（当前只有 {len(slots)} 张）。"
-                "先用 /qwen 记图 补标记，或用 /qwen 看图 确认顺序。"
+            return (
+                [],
+                [],
+                (
+                    f"图{missing[0]}没有标记（当前只有 {len(slots)} 张）。"
+                    "先用 /qwen 记图 补标记，或用 /qwen 看图 确认顺序。"
+                ),
             )
         paths = [str(slots[n - 1].get("path")) for n in mentions]
         return paths, mentions, None
 
-    async def edit(self, event: Any, prompt: str) -> str:
+    async def edit(self, event: Any, prompt: str) -> str | None:
         if not self._bool("img2img_enabled", True):
             return "图生图/改图功能已关闭，请在插件配置里开启后再试。"
         if not self._is_allowed(event):
@@ -300,6 +311,9 @@ class CommandActionHandler:
         payload = await self._run_tool(tool_args)
         message = await self._send_payload(event, payload)
         self._record_edit_task(event, original, image_paths, payload, image_source)
+        delivery_status = (payload.get("delivery") or {}).get("status")
+        if delivery_status in {"sent", "operation_failed", "no_output"}:
+            return None
         if image_source == "slots" and payload.get("ok") and used_slots:
             names = "、".join(f"图{n}" for n in used_slots)
             message += f"（本次使用已标记的{names}。）"

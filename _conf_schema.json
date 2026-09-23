@@ -198,8 +198,8 @@
       "output_size_mode": {
         "description": "输出尺寸模式",
         "type": "string",
-        "default": "aspect",
-        "hint": "控制双图及三图编辑：aspect 使用下方宽高比与像素量（默认 4:3、1 MP）；target 跟随目标图。单图由下一项单独控制。",
+        "default": "target",
+        "hint": "控制双图及三图编辑：target 默认跟随第一张目标图的宽高比与尺寸；aspect 使用下方自定宽高比与像素量。单图由下一项单独控制。",
         "options": [
           "target",
           "aspect"
@@ -209,8 +209,14 @@
         "description": "单图编辑输出尺寸",
         "type": "string",
         "default": "target",
-        "hint": "target：单图默认跟随目标图，经工作流限制在最多 1 MP；configured：改用下方宽高比和像素量。双图及三图仍遵循上方输出尺寸模式。",
+        "hint": "target：单图默认跟随目标图，经工作流限制在最多 1 MP；configured：改用下方宽高比和像素量。关闭下方 1 MP 限制时，target 模式保留原图尺寸。",
         "options": ["target", "configured"]
+      },
+      "limit_image_megapixels": {
+        "description": "限制参考图与默认输出至 1 MP",
+        "type": "bool",
+        "default": true,
+        "hint": "默认开启：每张参考图最多 1 MiP，不放大小图；target 输出跟随处理后的第一张图。关闭后上传原分辨率参考图，target 输出也跟随原图，并忽略下方输入最长边设置；显存占用可能大幅增加。手动设置的固定输出尺寸仍生效。"
       },
       "output_aspect": {
         "description": "输出宽高比",
@@ -318,7 +324,7 @@
         "description": "输入图最长边",
         "type": "int",
         "default": 0,
-        "hint": "上传前最长边限制；默认 0 表示不在客户端缩小。内置双图参考工作流仍会把每张参考图限制在最多 1 MP，较小图不放大。显存不足时可设为 1024 或 1536。",
+        "hint": "仅在开启上方 1 MP 限制时生效；默认 0 表示不额外缩小。显存不足时可设为 1024 或 1536。关闭 1 MP 限制即使用原图，不受此项影响。",
         "collapsed": true,
         "condition": {
           "img2img_enabled": true

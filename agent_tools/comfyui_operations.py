@@ -26,8 +26,13 @@ def edit_payload(
     truncated = len(images) - len(kept)
     client = ComfyUIHttpClient(config)
     uploaded: list[str] = []
+    max_image_side = (
+        int(config.get("max_image_side", 0))
+        if bool(config.get("limit_image_megapixels", True))
+        else 0
+    )
     for image in kept:
-        prepared = _prepare_upload_image(image, int(config.get("max_image_side", 1024)))
+        prepared = _prepare_upload_image(image, max_image_side)
         uploaded.append(client.upload_image(prepared))
     steps = int(args.steps or config.get("steps", 25))
     cfg = float(args.cfg or config.get("cfg", 1.0))

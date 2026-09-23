@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 import sys
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock
+
 
 PLUGIN_DIR = Path(__file__).resolve().parents[1]
 AGENT_TOOLS_DIR = PLUGIN_DIR / "agent_tools"
@@ -29,6 +31,7 @@ from command_router import (  # noqa: E402
     help_text,
     parse_hard_route,
 )
+from command_actions import CommandActionHandler  # noqa: E402
 from image_slots import (  # noqa: E402
     detect_target_mention,
     find_image_mentions,
@@ -151,10 +154,48 @@ def test_cli_agent_defaults_match_validated_models() -> None:
     assert COMFYUI_AGENT_DEFAULT_CONFIG["steps"] == 25
     assert COMFYUI_AGENT_DEFAULT_CONFIG["cfg"] == 1.0
     assert COMFYUI_AGENT_DEFAULT_CONFIG["workflow"] == "qwen21_edit"
-    assert COMFYUI_AGENT_DEFAULT_CONFIG["output_size_mode"] == "aspect"
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["output_size_mode"] == "target"
     assert COMFYUI_AGENT_DEFAULT_CONFIG["output_aspect"] == "4:3"
     assert COMFYUI_AGENT_DEFAULT_CONFIG["output_megapixels"] == 1.0
     assert COMFYUI_AGENT_DEFAULT_CONFIG["single_image_size_mode"] == "target"
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["limit_image_megapixels"] is True
+    assert resolve_output_size(COMFYUI_AGENT_DEFAULT_CONFIG, image_count=1) is None
+    assert resolve_output_size(COMFYUI_AGENT_DEFAULT_CONFIG, image_count=2) is None
+
+
+def test_edit_workflow_without_megapixel_limit_uses_original_images() -> None:
+    workflow = qwen21_edit_workflow(
+        _config(limit_image_megapixels=False),
+        "prompt",
+        ["target.png", "reference.png"],
+        25,
+        1.0,
+        7,
+    )
+    assert workflow["474"]["inputs"]["images.image_1"] == ["470", 0]
+    assert workflow["474"]["inputs"]["images.image_2"] == ["475", 0]
+    assert workflow["458"]["inputs"]["latent_image"] == ["474", 2]
+    assert "477" not in workflow
+    assert "479" not in workflow
+
+
+def test_edit_does_not_return_duplicate_text_after_image_send() -> None:
+    handler = CommandActionHandler.__new__(CommandActionHandler)
+    handler._bool = lambda key, default: key != "prompt_optimize_enabled"
+    handler._is_allowed = lambda event: True
+    handler._ensure_ready = AsyncMock(return_value={"ok": True})
+    handler._event_image_inputs = AsyncMock(return_value=["target.png"])
+    handler._run_tool = AsyncMock(return_value={"ok": True, "outputs": ["out.png"]})
+
+    async def send_payload(event, payload):
+        payload["delivery"] = {"status": "sent"}
+        return "ComfyUI 已生成并发送图片：out.png"
+
+    handler._send_payload = send_payload
+    handler._record_edit_task = MagicMock()
+    event = MagicMock()
+    assert asyncio.run(handler.edit(event, "换个背景")) is None
+    handler._record_edit_task.assert_called_once()
 
 
 def test_cli_agent_flattens_qwen_grouped_config() -> None:

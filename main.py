@@ -126,7 +126,7 @@ class QwenImagePlugin(Star):
         self._last_prompt_summary = dict(result.summary)
         return result.final_prompt
 
-    async def _edit(self, event: AstrMessageEvent, prompt: str) -> str:
+    async def _edit(self, event: AstrMessageEvent, prompt: str) -> str | None:
         return await self._action_handler.edit(event, prompt)
 
     def _status_text(self, payload: dict[str, Any]) -> str:
@@ -189,12 +189,15 @@ class QwenImagePlugin(Star):
         if message:
             yield event.plain_result(message)
 
-    @qwen_group.command("edit", alias={"编辑", "改编", "改图", "图生图", "换装", "融合", "风格化", "重绘"})
+    @qwen_group.command(
+        "edit",
+        alias={"编辑", "改编", "改图", "图生图", "换装", "融合", "风格化", "重绘"},
+    )
     async def cmd_edit(self, event: AstrMessageEvent, prompt: GreedyStr):
         event.stop_event()
-        yield event.plain_result(
-            await self._handle_action(event, "edit", str(prompt or "").strip())
-        )
+        message = await self._handle_action(event, "edit", str(prompt or "").strip())
+        if message:
+            yield event.plain_result(message)
 
     @qwen_group.command("mark", alias={"记图", "标记", "存图"})
     async def cmd_mark_slots(self, event: AstrMessageEvent):

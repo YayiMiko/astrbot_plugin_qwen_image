@@ -104,14 +104,18 @@ def qwen21_edit_workflow(
         "resolution": 0,
         "vae": ["454", 0],
     }
-    # Match the saved workflow's default: cap each reference at 1 MP without
-    # enlarging smaller images, while output resolution stays independent.
+    # Cap references at 1 MiP by default; the first image also determines the
+    # output latent when no explicit output size is configured.
+    limit_image_megapixels = bool(config.get("limit_image_megapixels", True))
     for index, name in enumerate(names, start=1):
         load_id = ("470", "475", "490")[index - 1]
         size_id = ("483", "484", "491")[index - 1]
         math_id = ("485", "486", "492")[index - 1]
         scale_id = ("477", "479", "493")[index - 1]
         graph[load_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        if not limit_image_megapixels:
+            edit_inputs[f"images.image_{index}"] = [load_id, 0]
+            continue
         graph[size_id] = {
             "class_type": "GetImageSize",
             "inputs": {"image": [load_id, 0]},

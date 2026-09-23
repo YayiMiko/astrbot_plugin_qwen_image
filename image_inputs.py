@@ -7,6 +7,7 @@ from typing import Any
 import astrbot.api.message_components as Comp
 from astrbot.api.event import AstrMessageEvent
 from astrbot.core.utils.media_utils import MediaResolver
+from PIL import Image, ImageChops, ImageOps, ImageStat
 
 try:
     from .image_manifest import ImageInputManifest
@@ -331,6 +332,7 @@ class ImageInputResolver:
         limit = max(1, int(limit or 1))
         saved: list[str] = []
         seen_hashes: set[str] = set()
+        seen_previews: list[tuple[tuple[int, int], Image.Image]] = []
 
         def _remember(path: str | None) -> None:
             if not path or len(saved) >= limit:
@@ -338,8 +340,30 @@ class ImageInputResolver:
             digest = self._content_hash(Path(path))
             if digest is not None and digest in seen_hashes:
                 return
+            preview = None
+            image_size = None
+            try:
+                with Image.open(path) as image:
+                    image = ImageOps.exif_transpose(image)
+                    image_size = image.size
+                    preview = image.convert("RGB").resize((64, 64))
+                if any(
+                    image_size == previous_size
+                    and max(
+                        ImageStat.Stat(
+                            ImageChops.difference(preview, previous_preview)
+                        ).mean
+                    )
+                    < 2.0
+                    for previous_size, previous_preview in seen_previews
+                ):
+                    return
+            except Exception:
+                pass
             if digest is not None:
                 seen_hashes.add(digest)
+            if preview is not None and image_size is not None:
+                seen_previews.append((image_size, preview))
             saved.append(path)
 
         direct_images: list[Comp.Image] = []
@@ -361,9 +385,7 @@ class ImageInputResolver:
         for index, image in enumerate(direct_images, start=1):
             if len(saved) >= limit:
                 break
-            _remember(
-                await self._save_image_component(event, image, "message", index)
-            )
+            _remember(await self._save_image_component(event, image, "message", index))
         if len(saved) < limit:
             for index, data in enumerate(
                 self._raw_message_image_segments(event), start=1
