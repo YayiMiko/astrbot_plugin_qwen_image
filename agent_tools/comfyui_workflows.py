@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-#: Hard limit of the ``TextEncodeQwenImageEditPlus`` node (image1..image3).
+#: Chat-side limit; ``TextEncodeQwenImage21`` supports these image slots.
 MAX_EDIT_IMAGES = 3
 
 #: Workflow names understood by `build_edit_workflow`. Unknown names raise
@@ -36,7 +36,7 @@ def qwen21_edit_workflow(
     negative_prompt: str = "",
     output_size: tuple[int, int] | None = None,
 ) -> dict[str, Any]:
-    """Build the Qwen-Image-2.1 reference-edit workflow graph.
+    """Build the API graph of the validated two-image reference workflow.
 
     Args:
         config: Plugin configuration with model filenames.
@@ -49,9 +49,8 @@ def qwen21_edit_workflow(
         seed: Random seed.
         negative_prompt: Negative prompt, normally empty. Only meaningful
             when cfg is raised for text rendering.
-        output_size: Optional forced (width, height) for the output latent.
-            When set, the target image is rescaled (center-crop fill) before
-            VAE encoding; otherwise the output follows the target image.
+        output_size: Optional forced (width, height) for the independent output
+            latent. Without it, use the encoder's image-sized latent.
 
     Returns:
         ComfyUI API-format prompt graph.
@@ -64,26 +63,8 @@ def qwen21_edit_workflow(
         raise ValueError("qwen21_edit_workflow requires at least one image")
     names = names[:MAX_EDIT_IMAGES]
 
-    load_nodes: dict[str, dict[str, Any]] = {
-        "10": {"class_type": "LoadImage", "inputs": {"image": names[0]}},
-    }
-    edit_inputs: dict[str, Any] = {
-        "clip": ["45", 0],
-        "prompt": prompt,
-        "vae": ["15", 0],
-        "image1": ["10", 0],
-    }
-    # Extra reference images get their own LoadImage nodes ("20", "21").
-    for index, extra in enumerate(names[1:], start=2):
-        node_id = str(18 + index)  # 20, 21
-        load_nodes[node_id] = {
-            "class_type": "LoadImage",
-            "inputs": {"image": extra},
-        }
-        edit_inputs[f"image{index}"] = [node_id, 0]
-
     graph: dict[str, Any] = {
-        "44": {
+        "451": {
             "class_type": "UNETLoader",
             "inputs": {
                 "unet_name": config.get(
@@ -92,7 +73,7 @@ def qwen21_edit_workflow(
                 "weight_dtype": "default",
             },
         },
-        "45": {
+        "453": {
             "class_type": "CLIPLoader",
             "inputs": {
                 "clip_name": config.get(
@@ -102,7 +83,7 @@ def qwen21_edit_workflow(
                 "device": "default",
             },
         },
-        "15": {
+        "454": {
             "class_type": "VAELoader",
             "inputs": {
                 "vae_name": config.get(
@@ -110,56 +91,86 @@ def qwen21_edit_workflow(
                 )
             },
         },
-        "11": {
-            "class_type": "TextEncodeQwenImageEditPlus",
-            "inputs": edit_inputs,
+        "469": {
+            "class_type": "QwenImage21Cache",
+            "inputs": {"model": ["451", 0], "device": "auto", "dtype": "int8"},
         },
-        "12": {
-            "class_type": "CLIPTextEncode",
-            "inputs": {"text": negative_prompt, "clip": ["45", 0]},
-        },
-        "30": {
-            "class_type": "VAEEncode",
-            "inputs": {"pixels": ["25", 0] if output_size else ["10", 0], "vae": ["15", 0]},
-        },
-        "19": {
-            "class_type": "KSampler",
+        "480": {"class_type": "PrimitiveFloat", "inputs": {"value": 1.0}},
+    }
+    edit_inputs: dict[str, Any] = {
+        "clip": ["453", 0],
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "resolution": 0,
+        "vae": ["454", 0],
+    }
+    # Match the saved workflow's default: cap each reference at 1 MP without
+    # enlarging smaller images, while output resolution stays independent.
+    for index, name in enumerate(names, start=1):
+        load_id = ("470", "475", "490")[index - 1]
+        size_id = ("483", "484", "491")[index - 1]
+        math_id = ("485", "486", "492")[index - 1]
+        scale_id = ("477", "479", "493")[index - 1]
+        graph[load_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
+        graph[size_id] = {
+            "class_type": "GetImageSize",
+            "inputs": {"image": [load_id, 0]},
+        }
+        graph[math_id] = {
+            "class_type": "ComfyMathExpression",
             "inputs": {
-                "model": ["44", 0],
-                "positive": ["11", 0],
-                "negative": ["12", 0],
-                "latent_image": ["30", 0],
-                "seed": seed,
-                "steps": steps,
-                "cfg": cfg,
-                "sampler_name": config.get("sampler_name", "euler"),
-                "scheduler": config.get("scheduler", "simple"),
-                # The edit model preserves the target via conditioning,
-                # not via denoise. Always run full denoise here.
-                "denoise": 1.0,
+                "expression": "min(c, a*b/1048576)",
+                "values.a": [size_id, 0],
+                "values.b": [size_id, 1],
+                "values.c": ["480", 0],
             },
-        },
-        "8": {
-            "class_type": "VAEDecode",
-            "inputs": {"samples": ["19", 0], "vae": ["15", 0]},
-        },
-        "9": {
-            "class_type": "SaveImage",
-            "inputs": {"images": ["8", 0], "filename_prefix": "astrbot/qwen"},
+        }
+        graph[scale_id] = {
+            "class_type": "ImageScaleToTotalPixels",
+            "inputs": {
+                "upscale_method": "lanczos",
+                "megapixels": [math_id, 0],
+                "resolution_steps": 32,
+                "image": [load_id, 0],
+            },
+        }
+        edit_inputs[f"images.image_{index}"] = [scale_id, 0]
+
+    graph["474"] = {"class_type": "TextEncodeQwenImage21", "inputs": edit_inputs}
+    graph["458"] = {
+        "class_type": "KSampler",
+        "inputs": {
+            "model": ["469", 0],
+            "positive": ["474", 0],
+            "negative": ["474", 1],
+            "latent_image": ["456", 0] if output_size else ["474", 2],
+            "seed": seed,
+            "steps": steps,
+            "cfg": cfg,
+            "sampler_name": config.get("sampler_name", "euler"),
+            "scheduler": config.get("scheduler", "simple"),
+            "denoise": 1.0,
         },
     }
-    graph.update(load_nodes)
+    graph["457"] = {
+        "class_type": "VAEDecode",
+        "inputs": {"samples": ["458", 0], "vae": ["454", 0]},
+    }
+    graph["461"] = {
+        "class_type": "SaveImageAdvanced",
+        "inputs": {
+            "images": ["457", 0],
+            "filename_prefix": "astrbot/qwen",
+            "format": "png",
+            "format.bit_depth": "8-bit",
+            "format.input_color_space": "sRGB",
+        },
+    }
     if output_size:
         width, height = output_size
-        graph["25"] = {
-            "class_type": "ImageScale",
-            "inputs": {
-                "image": ["10", 0],
-                "upscale_method": "lanczos",
-                "width": int(width),
-                "height": int(height),
-                "crop": "center",
-            },
+        graph["456"] = {
+            "class_type": "EmptyLatentImage",
+            "inputs": {"width": int(width), "height": int(height), "batch_size": 1},
         }
     return graph
 
@@ -253,9 +264,7 @@ def _unwrap_workflow_body(raw: Any, source: str) -> dict[str, Any]:
     return body
 
 
-def _node_ids_by_class(
-    workflow_body: dict[str, Any], class_type: str
-) -> list[str]:
+def _node_ids_by_class(workflow_body: dict[str, Any], class_type: str) -> list[str]:
     return sorted(
         str(node_id)
         for node_id, node in workflow_body.items()
@@ -403,9 +412,7 @@ def custom_qwen_edit_workflow(
     return graph
 
 
-def _set_text_input(
-    workflow_body: dict[str, Any], node_id: str, value: str
-) -> None:
+def _set_text_input(workflow_body: dict[str, Any], node_id: str, value: str) -> None:
     node = workflow_body.get(str(node_id))
     if not isinstance(node, dict):
         raise ValueError(f"custom_workflow_node_not_found: {node_id}")

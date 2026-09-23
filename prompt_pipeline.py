@@ -12,9 +12,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 try:
-    from .prompt_templates import match_template
+    from .prompt_templates import TWO_IMAGE_OUTFIT_PROMPT, match_template
 except ImportError:  # pragma: no cover - fallback for direct script-style imports.
-    from prompt_templates import match_template
+    from prompt_templates import TWO_IMAGE_OUTFIT_PROMPT, match_template
 
 QWEN_REWRITE_SYSTEM_PROMPT = """You are the prompt rewriter for Qwen-Image-2.1, a 7.1B single-stream DiT that does reference editing. It was trained on natural-language captions, NOT on booru tags.
 
@@ -30,6 +30,7 @@ HARD RULES:
 
 EDIT MODE (the request edits supplied images):
 - <image1> is ALWAYS the edit target. <image2>/<image3> are references (outfit, character, style, ...).
+- For clothing transfer from <image2>, follow the supplied two-image outfit template instead of the generic skeleton; preserve <image1>'s art style as well as its identity, pose, framing, background and lighting.
 - Every edit prompt MUST state what stays and what changes, using this skeleton:
   Keep the character and pose in <image1> unchanged, [CHANGE], preserve the original facial features, hair, body shape and pose, [FIT/REALISM clause], keep the original background and original lighting, [STYLE anchor], sharp details
 - Map the user's image mentions (图一/图二/图三, 第一张/第二张, image 1/2, quoted images, staged slots) onto <image1>/<image2>/<image3>. The first supplied image is <image1>.
@@ -121,9 +122,7 @@ class PromptPipeline:
                 cfg.get("provider_settings", {}).get("default_provider_id") or ""
             ).strip()
         except Exception as exc:
-            self.logger.warning(
-                "[qwen] failed to get current chat provider: %s", exc
-            )
+            self.logger.warning("[qwen] failed to get current chat provider: %s", exc)
             return ""
 
     async def _rewrite_with_llm(
@@ -152,6 +151,11 @@ class PromptPipeline:
                 "writing only 'the outfit from <image2>'. Demand a faithful "
                 "reproduction: the same garment, the same colours, the same "
                 "pattern, the same details."
+            )
+            llm_prompt += (
+                "\nUse this validated two-image outfit prompt as the backbone, "
+                "adding only the user's requested details and the reference "
+                f"garment details you can actually see:\n{TWO_IMAGE_OUTFIT_PROMPT}"
             )
         response = await self.context.llm_generate(
             chat_provider_id=provider_id,

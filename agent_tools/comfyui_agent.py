@@ -39,6 +39,9 @@ IMAGE_RESOLVER = ComfyUIImageResolver(WORKSPACE)
 DEFAULT_CONFIG = {
     "comfyui_base_url": "http://127.0.0.1:8188",
     "workflow": "qwen21_edit",
+    "output_size_mode": "aspect",
+    "output_aspect": "4:3",
+    "output_megapixels": 1.0,
     "timeout": 600,
     "poll_interval": 2,
     "allowed_sizes": [

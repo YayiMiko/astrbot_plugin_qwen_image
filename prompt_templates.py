@@ -17,13 +17,27 @@ TEMPLATE_SKELETON = (
     "illustration, cel-shaded, sharp details"
 )
 
+# The default outfit prompt from the validated two-image ComfyUI workflow.
+TWO_IMAGE_OUTFIT_PROMPT = (
+    "Put the clothing from <image2> onto the character in <image1>, replacing "
+    "the outfit they are currently wearing. Keep the character's face, hairstyle, "
+    "body shape and pose exactly as they appear in <image1>. Reproduce the "
+    "clothing from <image2> faithfully: the same garment, the same colours, "
+    "the same pattern, the same details. The clothing should fit the character's "
+    "body naturally, with correct proportions, believable fabric drape and "
+    "natural folds at the shoulders, elbows and waist. Keep the original "
+    "background, camera angle, lighting and art style of <image1> unchanged."
+)
+
 _STRIP_CHARS = " ，,：:。.!！?？~～"
 
 _CHANGE_PATTERNS = (
     re.compile(r"把(.+?)换成(.+)"),
     re.compile(r"[穿换]上(.+)"),
     re.compile(r"换(?:成)?(.+?)(?:衣服|服装|裙子|制服|外套|上衣|裤子|鞋子)$"),
-    re.compile(r"(?:表情|背景|姿势|姿态|发色|头发|颜色|风格|衣服|服装)(?:换成|变成|改为|改成)(.+)"),
+    re.compile(
+        r"(?:表情|背景|姿势|姿态|发色|头发|颜色|风格|衣服|服装)(?:换成|变成|改为|改成)(.+)"
+    ),
 )
 
 
@@ -72,9 +86,7 @@ def _strip_mention_tokens(text: str) -> str:
 def _outfit_change(prompt: str, image_count: int) -> str:
     detail = _extract_change(prompt)
     bare = detail == _clean_detail(prompt) and len(detail) <= 6
-    mentions_ref = (
-        "图二" in prompt or "图2" in prompt or "image2" in prompt.lower()
-    )
+    mentions_ref = "图二" in prompt or "图2" in prompt or "image2" in prompt.lower()
     if image_count > 1 and (bare or mentions_ref):
         base = "put the outfit from <image2> on the character"
         extra = _strip_mention_tokens(detail)
@@ -89,13 +101,32 @@ def _outfit_change(prompt: str, image_count: int) -> str:
 _TEMPLATES: tuple[dict[str, object], ...] = (
     {
         "name": "outfit",
-        "keywords": ("换装", "换衣服", "穿上", "换上", "换件", "服装", "制服", "outfit"),
+        "keywords": (
+            "换装",
+            "换衣服",
+            "穿上",
+            "换上",
+            "换件",
+            "服装",
+            "制服",
+            "outfit",
+        ),
         "change": _outfit_change,
         "fit": "reproduce the outfit from <image2> faithfully: the same garment, the same colours, the same pattern, the same details; do not keep any garment of the original outfit",
     },
     {
         "name": "expression",
-        "keywords": ("换表情", "表情", "微笑", "大笑", "哭", "生气", "害羞", "惊讶", "expression"),
+        "keywords": (
+            "换表情",
+            "表情",
+            "微笑",
+            "大笑",
+            "哭",
+            "生气",
+            "害羞",
+            "惊讶",
+            "expression",
+        ),
         "change": lambda prompt, image_count: (
             f"change the expression to {_extract_change(prompt)}, "
             "keep everything else identical"
@@ -113,7 +144,16 @@ _TEMPLATES: tuple[dict[str, object], ...] = (
     },
     {
         "name": "pose",
-        "keywords": ("换姿势", "换姿态", "姿势", "姿态", "坐下", "站起", "躺下", "pose"),
+        "keywords": (
+            "换姿势",
+            "换姿态",
+            "姿势",
+            "姿态",
+            "坐下",
+            "站起",
+            "躺下",
+            "pose",
+        ),
         "change": lambda prompt, image_count: (
             f"change the pose to {_extract_change(prompt)}, "
             "keep the face and outfit unchanged"
@@ -166,9 +206,22 @@ def match_template(user_prompt: str, image_count: int = 1) -> tuple[str, str] | 
             continue
         change_builder = template["change"]
         assert callable(change_builder)
-        change = change_builder(text, max(1, int(image_count or 1)))
+        count = max(1, int(image_count or 1))
+        change = change_builder(text, count)
         fit = str(template["fit"])
         name = str(template["name"])
+        if name == "outfit" and count > 1:
+            detail = _strip_mention_tokens(_extract_change(text))
+            if detail == _clean_detail(text) and len(detail) <= 6:
+                detail = ""
+            if detail and detail not in _MENTION_ONLY_LEFT:
+                return (
+                    name,
+                    f"{TWO_IMAGE_OUTFIT_PROMPT} Additional outfit detail: {detail}.",
+                )
+            return name, TWO_IMAGE_OUTFIT_PROMPT
+        if name == "outfit":
+            fit = "the new outfit fits naturally with believable fabric folds"
         return name, TEMPLATE_SKELETON.format(change=change, fit=fit)
     return None
 

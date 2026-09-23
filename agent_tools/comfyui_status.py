@@ -101,7 +101,19 @@ def build_status_payload(
                 in _available_models(object_info, "CLIPLoader", "clip_name"),
                 "vae_available": config.get("vae_name")
                 in _available_models(object_info, "VAELoader", "vae_name"),
-                "qwen_edit_available": "TextEncodeQwenImageEditPlus" in object_info,
+                "qwen_edit_available": all(
+                    node in object_info
+                    for node in (
+                        "TextEncodeQwenImage21",
+                        "QwenImage21Cache",
+                        "ImageScaleToTotalPixels",
+                        "GetImageSize",
+                        "ComfyMathExpression",
+                        "PrimitiveFloat",
+                        "SaveImageAdvanced",
+                        "EmptyLatentImage",
+                    )
+                ),
                 "comfyui_api_reachable": True,
             }
         )

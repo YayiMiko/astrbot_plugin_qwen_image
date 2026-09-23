@@ -39,6 +39,7 @@ from image_slots import (  # noqa: E402
     ImageSlotStore,
 )
 from prompt_templates import (  # noqa: E402
+    TWO_IMAGE_OUTFIT_PROMPT,
     match_template,
     template_names,
 )
@@ -66,59 +67,66 @@ def test_edit_workflow_matches_validated_graph() -> None:
         _config(), "Keep everything.", ["target.png"], 25, 1.0, 42
     )
 
-    assert workflow["44"]["class_type"] == "UNETLoader"
-    assert workflow["44"]["inputs"]["unet_name"] == (
+    assert workflow["451"]["class_type"] == "UNETLoader"
+    assert workflow["451"]["inputs"]["unet_name"] == (
         "qwen_image_2.1_nvfp4.safetensors"
     )
-    assert workflow["45"]["inputs"] == {
+    assert workflow["453"]["inputs"] == {
         "clip_name": "qwen3vl_8b_nvfp4_heretic.safetensors",
         "type": "qwen_image",
         "device": "default",
     }
-    assert workflow["15"]["inputs"] == {
+    assert workflow["454"]["inputs"] == {
         "vae_name": "qwen_image_2.1_vae_bf16.safetensors"
     }
-    assert workflow["10"] == {
+    assert workflow["469"]["inputs"] == {
+        "model": ["451", 0],
+        "device": "auto",
+        "dtype": "int8",
+    }
+    assert workflow["470"] == {
         "class_type": "LoadImage",
         "inputs": {"image": "target.png"},
     }
-    assert workflow["11"]["class_type"] == "TextEncodeQwenImageEditPlus"
-    assert workflow["11"]["inputs"]["image1"] == ["10", 0]
-    assert workflow["11"]["inputs"]["prompt"] == "Keep everything."
-    assert workflow["11"]["inputs"]["vae"] == ["15", 0]
-    assert workflow["12"]["inputs"] == {"text": "", "clip": ["45", 0]}
-    assert workflow["30"]["inputs"] == {"pixels": ["10", 0], "vae": ["15", 0]}
-    sampler = workflow["19"]["inputs"]
-    assert sampler["model"] == ["44", 0]
-    assert sampler["positive"] == ["11", 0]
-    assert sampler["negative"] == ["12", 0]
-    assert sampler["latent_image"] == ["30", 0]
+    assert workflow["485"]["inputs"]["expression"] == "min(c, a*b/1048576)"
+    assert workflow["477"]["inputs"]["megapixels"] == ["485", 0]
+    assert workflow["474"]["class_type"] == "TextEncodeQwenImage21"
+    assert workflow["474"]["inputs"]["images.image_1"] == ["477", 0]
+    assert workflow["474"]["inputs"]["prompt"] == "Keep everything."
+    assert workflow["474"]["inputs"]["vae"] == ["454", 0]
+    assert workflow["474"]["inputs"]["negative_prompt"] == ""
+    sampler = workflow["458"]["inputs"]
+    assert sampler["model"] == ["469", 0]
+    assert sampler["positive"] == ["474", 0]
+    assert sampler["negative"] == ["474", 1]
+    assert sampler["latent_image"] == ["474", 2]
     assert sampler["steps"] == 25
     assert sampler["cfg"] == 1.0
     assert sampler["sampler_name"] == "euler"
     assert sampler["scheduler"] == "simple"
     assert sampler["denoise"] == 1.0
-    assert workflow["8"]["inputs"] == {"samples": ["19", 0], "vae": ["15", 0]}
-    assert workflow["9"]["inputs"]["filename_prefix"] == "astrbot/qwen"
+    assert workflow["457"]["inputs"] == {"samples": ["458", 0], "vae": ["454", 0]}
+    assert workflow["461"]["class_type"] == "SaveImageAdvanced"
+    assert workflow["461"]["inputs"]["filename_prefix"] == "astrbot/qwen"
 
 
 def test_edit_workflow_wires_up_to_three_reference_images() -> None:
     workflow = qwen21_edit_workflow(
         _config(), "prompt", ["a.png", "b.png", "c.png", "d.png"], 25, 1.0, 7
     )
-    assert workflow["11"]["inputs"]["image1"] == ["10", 0]
-    assert workflow["11"]["inputs"]["image2"] == ["20", 0]
-    assert workflow["11"]["inputs"]["image3"] == ["21", 0]
-    assert workflow["20"]["inputs"] == {"image": "b.png"}
-    assert workflow["21"]["inputs"] == {"image": "c.png"}
+    assert workflow["474"]["inputs"]["images.image_1"] == ["477", 0]
+    assert workflow["474"]["inputs"]["images.image_2"] == ["479", 0]
+    assert workflow["474"]["inputs"]["images.image_3"] == ["493", 0]
+    assert workflow["475"]["inputs"] == {"image": "b.png"}
+    assert workflow["490"]["inputs"] == {"image": "c.png"}
+    assert "d.png" not in str(workflow)
     assert MAX_EDIT_IMAGES == 3
 
 
 def test_cli_agent_defaults_match_validated_models() -> None:
     assert COMFYUI_AGENT_ROOT == PLUGIN_DIR.parents[2]
     assert (
-        COMFYUI_AGENT_DEFAULT_CONFIG["unet_name"]
-        == "qwen_image_2.1_nvfp4.safetensors"
+        COMFYUI_AGENT_DEFAULT_CONFIG["unet_name"] == "qwen_image_2.1_nvfp4.safetensors"
     )
     assert (
         COMFYUI_AGENT_DEFAULT_CONFIG["clip_name"]
@@ -131,6 +139,9 @@ def test_cli_agent_defaults_match_validated_models() -> None:
     assert COMFYUI_AGENT_DEFAULT_CONFIG["steps"] == 25
     assert COMFYUI_AGENT_DEFAULT_CONFIG["cfg"] == 1.0
     assert COMFYUI_AGENT_DEFAULT_CONFIG["workflow"] == "qwen21_edit"
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["output_size_mode"] == "aspect"
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["output_aspect"] == "4:3"
+    assert COMFYUI_AGENT_DEFAULT_CONFIG["output_megapixels"] == 1.0
 
 
 def test_cli_agent_flattens_qwen_grouped_config() -> None:
@@ -266,9 +277,7 @@ def test_template_tier_hit_without_llm() -> None:
 
 def test_template_outfit_uses_ref_default() -> None:
     pipeline = _pipeline()
-    result = asyncio.run(
-        pipeline.build(None, "换装", mode="img2img", image_count=2)
-    )
+    result = asyncio.run(pipeline.build(None, "换装", mode="img2img", image_count=2))
     assert result.summary.get("tier") == "template:outfit"
     assert "<image2>" in result.final_prompt
 
@@ -305,23 +314,23 @@ def test_production_case_reordered_prompt_builds_correct_roles() -> None:
     pipeline = _pipeline()
     result = asyncio.run(pipeline.build(None, prompt, mode="img2img", image_count=2))
     assert result.summary.get("tier") == "template:outfit"
-    assert result.final_prompt.startswith(
-        "Keep the character and pose in <image1> unchanged"
-    )
-    assert "outfit from <image2>" in result.final_prompt
+    assert result.final_prompt == TWO_IMAGE_OUTFIT_PROMPT
 
 
 def test_outfit_parenthetical_denoised() -> None:
     matched = match_template("为图2角色穿上图1的衣服", 2)
     assert matched is not None
     assert "(图" not in matched[1]
-    assert "outfit from <image2>" in matched[1]
-    assert "do not keep any garment" in matched[1]
+    assert "clothing from <image2>" in matched[1]
+    assert matched[1] == TWO_IMAGE_OUTFIT_PROMPT
     assert "faithfully" in matched[1]
     matched = match_template("穿上红色礼服", 2)
     assert matched is not None
     assert "红色礼服" in matched[1]
     assert "(图" not in matched[1]
+    single = match_template("穿上红色礼服", 1)
+    assert single is not None
+    assert "<image2>" not in single[1]
 
 
 def test_vision_outfit_routing_passes_images() -> None:
@@ -353,6 +362,7 @@ def test_vision_outfit_routing_passes_images() -> None:
     assert result.summary.get("tier") == "llm:vision"
     assert calls["image_urls"] == ["target.png", "ref.png"]
     assert "garment by garment" in calls["prompt"]
+    assert TWO_IMAGE_OUTFIT_PROMPT in calls["prompt"]
     assert "white military jacket" in result.final_prompt
 
 
@@ -373,12 +383,20 @@ def test_vision_failure_falls_back_to_template() -> None:
     )
     assert result.summary.get("tier") == "template:outfit"
     assert result.summary.get("skipped_reason") == "rewrite_failed"
-    assert "outfit from <image2>" in result.final_prompt
+    assert "clothing from <image2>" in result.final_prompt
 
 
 def test_template_table_covers_skill_types() -> None:
     names = template_names()
-    for expected in ("outfit", "expression", "background", "pose", "hair", "prop", "style"):
+    for expected in (
+        "outfit",
+        "expression",
+        "background",
+        "pose",
+        "hair",
+        "prop",
+        "style",
+    ):
         assert expected in names
     matched = match_template("改成微笑表情", 1)
     assert matched is not None and matched[0] == "expression"
@@ -622,8 +640,8 @@ def test_build_edit_workflow_dispatch() -> None:
     import pytest
 
     builtin = build_edit_workflow(_config(), "p", ["a.png"], 25, 1.0, 1)
-    assert builtin["9"]["inputs"]["filename_prefix"] == "astrbot/qwen"
-    assert "25" not in builtin
+    assert builtin["461"]["inputs"]["filename_prefix"] == "astrbot/qwen"
+    assert "456" not in builtin
     with pytest.raises(ValueError, match="unsupported_workflow"):
         build_edit_workflow(
             dict(_config(), workflow="qwen21_t2i"), "p", ["a.png"], 25, 1.0, 1
@@ -645,13 +663,21 @@ def test_resolve_output_size() -> None:
     ) == (992, 992)
     assert (
         resolve_output_size(
-            {"output_size_mode": "aspect", "output_aspect": "9:99", "output_megapixels": 1.0}
+            {
+                "output_size_mode": "aspect",
+                "output_aspect": "9:99",
+                "output_megapixels": 1.0,
+            }
         )
         is None
     )
     assert (
         resolve_output_size(
-            {"output_size_mode": "aspect", "output_aspect": "3:4", "output_megapixels": 0}
+            {
+                "output_size_mode": "aspect",
+                "output_aspect": "3:4",
+                "output_megapixels": 0,
+            }
         )
         is None
     )
@@ -661,17 +687,12 @@ def test_edit_workflow_forced_output_size() -> None:
     workflow = qwen21_edit_workflow(
         _config(), "p", ["t.png"], 25, 1.0, 1, output_size=(864, 1152)
     )
-    assert workflow["25"] == {
-        "class_type": "ImageScale",
-        "inputs": {
-            "image": ["10", 0],
-            "upscale_method": "lanczos",
-            "width": 864,
-            "height": 1152,
-            "crop": "center",
-        },
+    assert workflow["456"] == {
+        "class_type": "EmptyLatentImage",
+        "inputs": {"width": 864, "height": 1152, "batch_size": 1},
     }
-    assert workflow["30"]["inputs"] == {"pixels": ["25", 0], "vae": ["15", 0]}
+    assert workflow["458"]["inputs"]["latent_image"] == ["456", 0]
+    assert workflow["474"]["inputs"]["images.image_1"] == ["477", 0]
 
 
 def test_check_commands_removed_from_chat() -> None:

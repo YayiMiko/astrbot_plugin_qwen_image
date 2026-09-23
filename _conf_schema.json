@@ -27,7 +27,7 @@
         "description": "插件工作流类型",
         "type": "string",
         "default": "qwen21_edit",
-        "hint": "这是插件内置的工作流类型，不是 ComfyUI 里保存的工作流名称。当前保持默认即可。示例：qwen21_edit",
+        "hint": "内置 qwen21_edit 使用 Qwen-Image-2.1-图像编辑-双图参考 的采样与条件编码链路。这里是插件工作流类型，不是 ComfyUI 保存的文件名。",
         "collapsed": true
       },
       "timeout": {
@@ -163,7 +163,7 @@
           "1152x896",
           "1216x832"
         ],
-        "hint": "格式为 宽x高，例如 1024x1024。改图输出尺寸跟随输入图；该列表仅用于状态展示。",
+        "hint": "格式为 宽x高，例如 1024x1024。该列表仅用于状态展示；实际输出由下方的尺寸模式决定。",
         "collapsed": true,
         "items": {
           "type": "string"
@@ -198,8 +198,8 @@
       "output_size_mode": {
         "description": "输出尺寸模式",
         "type": "string",
-        "default": "target",
-        "hint": "target：输出跟随目标图（默认）；aspect：按下方宽高比与像素量强制输出尺寸（目标图会被居中裁剪适配）。",
+        "default": "aspect",
+        "hint": "aspect：与双图参考工作流一致，按宽高比与像素量生成独立输出 latent（默认 4:3、1 MP）；target：使用编码器根据目标图生成的 latent。",
         "options": [
           "target",
           "aspect"
@@ -208,7 +208,7 @@
       "output_aspect": {
         "description": "输出宽高比",
         "type": "string",
-        "default": "3:4",
+        "default": "4:3",
         "hint": "仅在输出尺寸模式为 aspect 时生效。示例：3:4",
         "options": [
           "1:1",
@@ -317,7 +317,7 @@
         "description": "输入图最长边",
         "type": "int",
         "default": 0,
-        "hint": "超限输入会在上传前等比缩小。默认 0 表示不缩小（原生分辨率，换装细节保留最好）。显存不足或排队太慢时再设为 1024 或 1536。示例：0",
+        "hint": "上传前最长边限制；默认 0 表示不在客户端缩小。内置双图参考工作流仍会把每张参考图限制在最多 1 MP，较小图不放大。显存不足时可设为 1024 或 1536。",
         "collapsed": true,
         "condition": {
           "img2img_enabled": true
