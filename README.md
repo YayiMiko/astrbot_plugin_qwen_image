@@ -1,61 +1,35 @@
-# Qwen 绘图（图生图）
+# Qwen-Image-2.1 绘图插件
 
-这是一个 AstrBot 本地 ComfyUI 图生图插件，使用 Qwen-Image-2.1 参考编辑链路。插件使用独立命令、配置、持久化目录和 LLM 工具名，可以与 Anima / Krea / N5 插件同时启用。
-
-> 文生图正在开发中，暂不可用。`/qwen 生图` 会返回开发中提示。
-
-## 默认工作流
-
-内置 `qwen21_edit` 现在按本机已验证的
-`Qwen-Image-2.1-图像编辑-双图参考` 工作流构建 ComfyUI API 图；已保存的
-`qwen21_edit` 配置也会使用新图。无需把 ComfyUI 的界面工作流 JSON 粘贴到插件配置里。
-
-- UNET：`qwen_image_2.1_nvfp4.safetensors`
-- CLIP：`qwen3vl_8b_nvfp4_heretic.safetensors`，类型 `qwen_image`
-- VAE：`qwen_image_2.1_vae_bf16.safetensors`
-- 条件编码：`TextEncodeQwenImage21`（聊天入口最多取 3 张图），负面提示词由同一节点编码；模型经过 `QwenImage21Cache`（`auto` / `int8`）
-- 默认每张输入图在工作流内最多取 1 MiP 作为参考，小图不放大。**单图和双图/三图**默认都使用编码器输出的目标图 latent，保持第一张图的宽高比，输出最多约 1 MiP。插件配置页可以关闭“限制参考图与默认输出至 1 MP”，改用原图分辨率；高分辨率会增加显存占用。需要固定比例时仍可选择自定义输出尺寸模式。
-- 采样：25 steps、CFG 1.0、`euler + simple`
-- `SaveImageAdvanced` 输出 PNG，目录前缀：`astrbot/qwen`
+这个 AstrBot 插件通过 ComfyUI 使用 Qwen-Image-2.1，支持文生图、单图改图和最多三图参考编辑。AstrBot 只负责接收指令、整理图片、提交工作流和回传结果；提示词增强在 ComfyUI 所在机器上由本地 PE GGUF 完成，不调用 AstrBot 的聊天 LLM，也不默认添加二次元或其它画风。
 
 ## 使用
 
 ```text
-/qwen 改图 让图一的角色穿上图二的衣服    （附两张图，或先记图；改图和编辑是同一个功能）
-/qwen 编辑 为图中角色穿上吸血鬼贵族礼服  （附一张图，或引用图片）
-/qwen 记图     （把本条带的图/引用的图记为参考图1/2/3，最多 3 张，30 分钟有效；只回显本次新增的图）
-/qwen 看图     （查看已标记的参考图顺序)
-/qwen 清图     （清空已标记的参考图）
+/qwen 生图 雨夜的旧书店
+/qwen 改图 把图一角色的衣服换成图二的服装  （同时附图，或先用 /qwen 记图）
+/qwen 生图 原样 A red bicycle against a white wall
+/qwen 改图 无优化 Only change the sky to sunset
+/qwen 记图
+/qwen 看图
+/qwen 清图
 /qwen 状态
-/qwen 生图 一只猫   （返回"开发中"提示）
 ```
 
-`/qwen 诊断` / `/qwen 调试状态` 保留可用，但在指令表里折叠不显示。
+`原样`、`无优化`、`raw:` 前缀会跳过 PE，直接提交后面的提示词。文生图只响应显式 `/qwen 生图` 等子命令，普通聊天里提到 Qwen 不会自动生图。改图第一张图是目标，后续图片是参考。默认跟随目标图比例并限制参考图至约 1 MP；可在配置页关闭限制或指定输出比例。
 
-图片来源优先级：**本次消息自带/引用的图 > 已标记的槽位图**。第一张恒为改图目标，后面为参考（换装/融合/风格参考）。单图及多图默认跟随第一张图宽高比；工作流默认将每张参考图限制到最多 1 MiP，因此默认输出也最多约 1 MiP。关闭配置页的 1 MP 限制后使用原图分辨率，并忽略“输入图最长边”；手动固定输出尺寸设置仍会生效。引用图的 PNG/JPEG 重编码副本会按画面近似去重，避免误判成双图。
+## 本地工作流与依赖
 
-## 提示词三层
+- 文生图：`QwenPEGGUF_T2I` → `TextEncodeQwenImage21` → Qwen-Image-2.1 采样 → 保存图片。画幅由插件配置中的宽高比和像素量控制，默认 3:4、约 1 MP，与本机 PE 文生图工作流的固定画幅一致；当前不自动采用 PE 输出的比例建议。
+- 改图：上传目标图/参考图 → `QwenPEGGUF_Edit` 读取这些图片和原始要求 → `TextEncodeQwenImage21` → Qwen-Image-2.1 编辑采样 → 保存图片。
+- 本机参考工作流：`Qwen-Image-2.1-PE-GGUF-文生图.json`、`Qwen-Image-2.1-PE-GGUF-图像编辑-双图参考.json`。插件提交的是同等关键节点的 API 图，不依赖这些界面 JSON 的绝对路径。
+- ComfyUI 必须安装 Qwen-Image-2.1 的编码、缓存和保存节点，以及本机 `ComfyUI-QwenPE-GGUF`。GGUF 默认文件名为 `pe-t2i/pe_t2i_heretic-Q4_K_M.gguf` 和 `pe-i2i/pe_i2i_heretic-Q4_K_M.gguf`，可在插件配置页修改。
 
-1. **固定模板**（明确且单一的高频需求，零 LLM 调用）：换装/换表情/换背景/换姿势/改发色/加物件/风格化。遇到否定、复合动作或多图关系时转给视觉 LLM，避免关键词误触发。双图换装以原工作流中的英文提示词为基准，明确图一提供角色、图二提供服装；模板留在代码里。
-2. **LLM 改写**（其余一切）：插件 Agent 读取仓库内 `skills/qwen-image-21-prompt-expert/references/edit-policy.md` 作为默认 system prompt。根据输入图和用户语言写清编辑动作、图片分工与必要的保留项，不强制英文或把照片改成二次元。`改写模式` 可选 `auto` / `template_only` / `llm_only`；配置页的自定义 system prompt 会覆盖技能规则，清空可恢复内置。
-3. **原样直发**：`原样` / `无优化` 前缀跳过所有改写。
+PE 自定义节点、llama-server、GGUF 权重和 Qwen-Image-2.1 模型不包含在本插件仓库中；安装前应在 ComfyUI 中准备好这些依赖，并用 `/qwen 状态` 核查节点与模型。
 
-Qwen-Image-2.1 使用自然语言描述而非 tag 串。双图换装默认模板是工作流原有的英文段落；其他固定模板可能保留用户写下的中文细节。供 Codex 等 Agent 使用的完整入口在 `skills/qwen-image-21-prompt-expert/SKILL.md`，按无图文生图、单图编辑、多图参考读取不同规则。插件 Agent 当前仍只执行图生图，并读取该技能的共享编辑规则 `references/edit-policy.md`；技能具备文生图提示词能力不代表 `/qwen 生图` 已实现。
+PE 运行在 ComfyUI 机器上。即使 AstrBot 在服务器，配置中的 PE 地址 `http://127.0.0.1:8189` 也是 **ComfyUI 本机** 的服务地址，不是 AstrBot 容器地址。AstrBot 的 `comfyui_base_url` 则仍需填写服务器能访问的 ComfyUI 地址。PE 失败或返回不可解析内容时工作流会报错，不会悄悄把原始中文当增强结果继续生成。PE 与采样共用至少 1800 秒的任务超时预算。
 
-## 自定义工作流（给有 ComfyUI 经验的用户）
+内置改图使用 `qwen21_edit`，默认采样 25 步、CFG 1.0、`euler + simple`，模型文件名在配置页核对。自定义编辑工作流仍按原有节点绑定契约运行；由于其节点结构未知，目前自定义工作流直接使用原始提示词，不插入 PE。要使用本地 PE，请关闭自定义工作流并使用内置链路。
 
-内置 `qwen21_edit` 开箱即用；也可在配置页开启自定义并填写 JSON 路径（相对插件目录，服务器上是服务器路径）或粘贴内联 JSON。**绑定契约**：
+自定义编辑图按节点编号绑定：`LoadImage` 依序接收目标图和参考图；第一个含 `text` 输入的编码节点接收正向提示词，第二个（若有）接收负面提示词。所有 `SaveImage` 前缀改为 `astrbot/qwen_custom`，采样节点的 seed/steps/CFG 按请求覆盖。图像编码器与目标图的连接由工作流作者负责。
 
-- `LoadImage` 节点按编号顺序接收上传图：第一个=编辑目标，后面=参考；节点数不得少于实际图片数。
-- 第一个含 `text` 的 `*TextEncode*` 节点收正向提示词，第二个（如果有）收负面。
-- 所有 `SaveImage` 前缀会被改写为 `astrbot/qwen_custom`；所有 `seed` / `noise_seed` 会被重随机。
-- `VAEEncode` 的目标接线是作者的责任；没连到第一个 LoadImage 时只记警告。
-
-探针校验（8 步快跑）与失败日志导出以后会做到插件配置页；目前 `check_workflow` / `fetch_check_log` 作为内部接口保留，QQ 侧不暴露。
-## 部署说明
-
-AstrBot 与 ComfyUI 同机时，默认地址为 `http://127.0.0.1:8188`。AstrBot 位于服务器、ComfyUI 位于本地 Windows 时，应填写 AstrBot 能访问到的局域网或 Tailscale 地址（ComfyUI 需 `--listen 0.0.0.0` 启动，否则服务器报连接超时）；容器内的启动命令不能直接启动远端 Windows ComfyUI。
-
-## 路线图
-
-文生图（`qwen21_t2i`）以后会以新的 workflow 名接入同一套分发（未知 workflow 名现在会明确报错而不是静默跑错图）。
+`/qwen 诊断` 和 `/qwen 调试状态` 保留。QQ 侧发送成功时只发图片，不再附加“已生成并发送”文字。

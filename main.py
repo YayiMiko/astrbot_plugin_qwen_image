@@ -45,7 +45,6 @@ class QwenImagePlugin(Star):
         ):
             config.save_config(replace_config=group_config(raw_config, schema_path))
         self.config = raw_config
-        self._last_prompt_summary: dict[str, Any] = {}
         self._services = build_services(
             context=self.context,
             config=self.config,
@@ -56,12 +55,9 @@ class QwenImagePlugin(Star):
             get_str=self._str,
             shorten=self._shorten,
             is_allowed=self._is_allowed,
-            build_prompt=self._build_qwen_prompt,
-            prompt_summary=lambda: dict(self._last_prompt_summary),
             edit=self._edit,
         )
         self._runtime = self._services.runtime
-        self._prompt_pipeline = self._services.prompt_pipeline
         self._action_handler = self._services.action_handler
         self._llm_tool_bridge = self._services.llm_tool_bridge
 
@@ -111,20 +107,6 @@ class QwenImagePlugin(Star):
         if len(text) <= limit:
             return text
         return text[:limit].rstrip() + "\n...[已截断]"
-
-    async def _build_qwen_prompt(
-        self,
-        event: AstrMessageEvent,
-        user_prompt: str,
-        mode: str = "img2img",
-        image_count: int = 1,
-        image_paths: list[str] | None = None,
-    ) -> str:
-        result = await self._prompt_pipeline.build(
-            event, user_prompt, mode, image_count=image_count, image_paths=image_paths
-        )
-        self._last_prompt_summary = dict(result.summary)
-        return result.final_prompt
 
     async def _edit(self, event: AstrMessageEvent, prompt: str) -> str | None:
         return await self._action_handler.edit(event, prompt)
@@ -184,7 +166,7 @@ class QwenImagePlugin(Star):
     async def cmd_generate(self, event: AstrMessageEvent, prompt: GreedyStr):
         event.stop_event()
         message = await self._handle_action(
-            event, "t2i_stub", str(prompt or "").strip()
+            event, "generate", str(prompt or "").strip()
         )
         if message:
             yield event.plain_result(message)
@@ -230,7 +212,7 @@ class QwenImagePlugin(Star):
         multi-image fusion (up to 3 images; the first is the edit target).
         Users can also stage reference images first with the mark command and
         refer to them as image 1/2/3 (图一/图二/图三) in the prompt.
-        Text-to-image is NOT supported yet.
+        Text-to-image is available via the explicit /qwen 生图 command.
 
         Args:
             prompt(string): Edit requirement in any language.

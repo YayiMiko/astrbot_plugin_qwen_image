@@ -16,6 +16,7 @@ try:
         sanitize_session_key,
         slot_key,
     )
+    from .prompt_pipeline import strip_raw_prefix
 except Exception:  # pragma: no cover - fallback for direct script-style imports.
     from agent_tools.comfyui_workflows import MAX_EDIT_IMAGES
     from command_router import help_text
@@ -27,13 +28,10 @@ except Exception:  # pragma: no cover - fallback for direct script-style imports
         sanitize_session_key,
         slot_key,
     )
+    from prompt_pipeline import strip_raw_prefix
 
 
 SCHEMA_PATH = Path(__file__).with_name("_conf_schema.json")
-
-T2I_UNAVAILABLE = (
-    "Qwen 文生图正在开发中，暂不可用。当前可用 /qwen 改图（图生图/换装/多图融合）。"
-)
 
 PROBE_PROMPT = (
     "Keep the character and pose in <image1> unchanged, replace the "
@@ -59,8 +57,6 @@ class CommandActionHandler:
         image_input_summary: Callable[[], dict[str, Any]],
         slot_store: Any,
         prepare_probe_images: Callable[[], list[str]],
-        build_prompt: Callable[..., Any],
-        prompt_summary: Callable[[], dict[str, Any]],
         get_bool: Callable[[str, bool], bool],
         shorten: Callable[[str, int], str],
         config_store: Any = None,
@@ -76,7 +72,6 @@ class CommandActionHandler:
             send_payload: Chat payload sender.
             event_image_inputs: Multi-image input resolver.
             image_input_summary: Latest image input summary callback.
-            build_prompt: Prompt rewriter for img2img.
             get_bool: Config boolean accessor.
             shorten: Text-shortening helper.
         """
@@ -91,8 +86,6 @@ class CommandActionHandler:
         self._image_input_summary = image_input_summary
         self._slot_store = slot_store
         self._prepare_probe_images = prepare_probe_images
-        self._build_prompt = build_prompt
-        self._prompt_summary = prompt_summary
         self._bool = get_bool
         self._shorten = shorten
 
@@ -296,21 +289,17 @@ class CommandActionHandler:
             image_paths, slot_numbers, prompt
         )
         used_slots = slot_numbers if image_source == "slots" else []
-        original = raw_prompt
-        if self._bool("prompt_optimize_enabled", True):
-            prompt = await self._build_prompt(
-                event,
-                prompt,
-                mode="img2img",
-                image_count=len(image_paths),
-                image_paths=image_paths,
-            )
+        raw_mode, prompt = strip_raw_prefix(prompt)
+        if not prompt:
+            return "原样模式后仍需填写改图要求。"
         tool_args = ["edit", "--prompt", prompt]
+        if raw_mode or self._bool("custom_workflow_enabled", False):
+            tool_args.append("--raw")
         for image_path in image_paths:
             tool_args.extend(["--input", str(image_path)])
         payload = await self._run_tool(tool_args)
         message = await self._send_payload(event, payload)
-        self._record_edit_task(event, original, image_paths, payload, image_source)
+        self._record_edit_task(event, raw_prompt, image_paths, payload, image_source)
         delivery_status = (payload.get("delivery") or {}).get("status")
         if delivery_status in {"sent", "operation_failed", "no_output"}:
             return None
@@ -342,10 +331,6 @@ class CommandActionHandler:
             payload: ComfyUI helper result payload.
             image_source: Where the images came from (`attached` or `slots`).
         """
-        try:
-            summary = dict(self._prompt_summary() or {})
-        except Exception:
-            summary = {}
         task = {
             "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "action": "edit",
@@ -363,7 +348,7 @@ class CommandActionHandler:
                 "seed": payload.get("seed"),
             },
             "prompt": {"original_head": self._shorten(original, 1000)},
-            "prompt_summary": summary,
+            "prompt_summary": {"engine": payload.get("prompt_engine", "local_pe_i2i")},
             "outputs": list(payload.get("outputs") or []),
             "delivery": dict(payload.get("delivery") or {}),
         }
@@ -371,6 +356,46 @@ class CommandActionHandler:
             self._task_recorder.write(task)
         except Exception:
             pass
+
+    async def generate(self, event: Any, prompt: str) -> str | None:
+        """Generate from an explicit text-to-image command via local PE."""
+        if not self._bool("t2i_enabled", True):
+            return "文生图功能已关闭，请在插件配置里开启。"
+        raw_mode, prompt = strip_raw_prefix(prompt)
+        if not prompt:
+            return "请在后面写生图描述。例：/qwen 生图 雨夜的旧书店"
+        ready = await self._ensure_ready(event)
+        if not ready.get("ok"):
+            return await self._send_payload(event, ready)
+        args = ["generate", "--prompt", prompt]
+        if raw_mode:
+            args.append("--raw")
+        payload = await self._run_tool(args)
+        message = await self._send_payload(event, payload)
+        task = {
+            "time": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "action": "generate",
+            "platform_id": event.get_platform_id(),
+            "session_id": event.get_session_id(),
+            "sender_id": event.get_sender_id(),
+            "ok": bool(payload.get("ok")),
+            "error": payload.get("error") or "",
+            "prompt": {"original_head": self._shorten(prompt, 1000)},
+            "prompt_summary": {"engine": payload.get("prompt_engine", "local_pe_t2i")},
+            "outputs": list(payload.get("outputs") or []),
+            "delivery": dict(payload.get("delivery") or {}),
+        }
+        try:
+            self._task_recorder.write(task)
+        except Exception:
+            pass
+        if (payload.get("delivery") or {}).get("status") in {
+            "sent",
+            "operation_failed",
+            "no_output",
+        }:
+            return None
+        return message
 
     def _check_records(self) -> list[Path]:
         parent = self._task_recorder.path.parent
@@ -399,7 +424,7 @@ class CommandActionHandler:
         staged = self._prepare_probe_images()
         if not staged:
             return "探针图片缺失，无法校验。请检查插件目录 probe/ 是否完整。"
-        tool_args = ["edit", "--prompt", PROBE_PROMPT, "--steps", "8"]
+        tool_args = ["edit", "--prompt", PROBE_PROMPT, "--steps", "8", "--raw"]
         for image_path in staged[:MAX_EDIT_IMAGES]:
             tool_args.extend(["--input", str(image_path)])
         payload = await self._run_tool(tool_args)
@@ -486,8 +511,8 @@ class CommandActionHandler:
             return self.diagnose_text(await self._run_tool(["status"]))
         if action == "debug_status":
             return self._task_recorder.debug_status_text(self.config)
-        if action == "t2i_stub":
-            return T2I_UNAVAILABLE
+        if action == "generate":
+            return await self.generate(event, prompt)
         if action == "mark_slots":
             return await self.mark_slots(event)
         if action == "show_slots":

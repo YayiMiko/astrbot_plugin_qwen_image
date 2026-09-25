@@ -15,7 +15,6 @@ try:
     from .image_inputs import ImageInputResolver
     from .image_slots import ImageSlotStore
     from .llm_tool_bridge import LLMToolBridge
-    from .prompt_pipeline import PromptPipeline
     from .task_state import TaskRecorder
 except Exception:  # pragma: no cover - fallback for direct script-style imports.
     from agent_tools.comfyui_workflows import MAX_EDIT_IMAGES
@@ -24,7 +23,6 @@ except Exception:  # pragma: no cover - fallback for direct script-style imports
     from image_inputs import ImageInputResolver
     from image_slots import ImageSlotStore
     from llm_tool_bridge import LLMToolBridge
-    from prompt_pipeline import PromptPipeline
     from task_state import TaskRecorder
 
 
@@ -60,7 +58,6 @@ class QwenServices:
         runtime: Local ComfyUI process/tool runtime.
         task_recorder: Latest task summary recorder.
         image_inputs: Image input resolver.
-        prompt_pipeline: Prompt rewriting pipeline.
         action_handler: Chat command action handler.
         llm_tool_bridge: LLM tool bridge.
     """
@@ -70,7 +67,6 @@ class QwenServices:
     task_recorder: TaskRecorder
     image_inputs: ImageInputResolver
     slot_store: ImageSlotStore
-    prompt_pipeline: PromptPipeline
     action_handler: CommandActionHandler
     llm_tool_bridge: LLMToolBridge
 
@@ -109,8 +105,6 @@ def build_services(
     get_str: Callable[[str, str], str],
     shorten: Callable[[str, int], str],
     is_allowed: Callable[[Any], bool],
-    build_prompt: Callable[..., Any],
-    prompt_summary: Callable[[], dict[str, Any]],
     edit: Callable[[Any, str], Any],
 ) -> QwenServices:
     """Build all Qwen services for the plugin entry point.
@@ -125,8 +119,6 @@ def build_services(
         get_str: Config string accessor.
         shorten: Text-shortening helper.
         is_allowed: Permission checker.
-        build_prompt: Prompt rewriting callback.
-        prompt_summary: Latest prompt summary callback.
         edit: Edit callback for LLM tools.
 
     Returns:
@@ -163,6 +155,7 @@ def build_services(
                 continue
             staged.append(str(dst))
         return staged
+
     image_inputs = ImageInputResolver(
         workspace=paths.workspace,
         inputs_dir=paths.inputs,
@@ -174,15 +167,6 @@ def build_services(
         logger,
         ttl_minutes=get_int("slot_ttl_minutes", 30),
         max_slots=MAX_EDIT_IMAGES,
-    )
-    prompt_pipeline = PromptPipeline(
-        context=context,
-        config=config,
-        logger=logger,
-        get_bool=get_bool,
-        get_int=get_int,
-        get_str=get_str,
-        shorten=shorten,
     )
     action_handler = CommandActionHandler(
         config=config,
@@ -196,8 +180,6 @@ def build_services(
         image_input_summary=lambda: dict(image_inputs.last_summary),
         slot_store=slot_store,
         prepare_probe_images=_prepare_probe_images,
-        build_prompt=build_prompt,
-        prompt_summary=prompt_summary,
         get_bool=get_bool,
         shorten=shorten,
     )
@@ -211,7 +193,6 @@ def build_services(
         task_recorder=task_recorder,
         image_inputs=image_inputs,
         slot_store=slot_store,
-        prompt_pipeline=prompt_pipeline,
         action_handler=action_handler,
         llm_tool_bridge=llm_tool_bridge,
     )

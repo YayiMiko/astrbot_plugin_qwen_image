@@ -130,7 +130,7 @@ class ComfyUIRuntime:
         return payload
 
     async def run_tool(self, args: list[str]) -> dict[str, Any]:
-        timeout = max(self._int("timeout", 300), 30) + 60
+        timeout = max(self._int("timeout", 1800), 1800) + 60
         return await self.run_python_tool(self.tool, args, timeout)
 
     async def run_prompt_tool(self, args: list[str]) -> dict[str, Any]:

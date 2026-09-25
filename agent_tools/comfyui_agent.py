@@ -7,7 +7,7 @@ from typing import Any
 
 from comfyui_command_runner import run_cli_action
 from comfyui_inputs import ComfyUIImageResolver
-from comfyui_operations import edit_payload
+from comfyui_operations import edit_payload, t2i_payload
 from comfyui_sizes import allowed_sizes
 from comfyui_status import build_status_payload
 from comfyui_workflows import describe_custom_workflow
@@ -44,7 +44,10 @@ DEFAULT_CONFIG = {
     "output_megapixels": 1.0,
     "single_image_size_mode": "target",
     "limit_image_megapixels": True,
-    "timeout": 600,
+    "timeout": 1800,
+    "t2i_steps": 25,
+    "t2i_aspect": "3:4",
+    "t2i_megapixels": 1.0,
     "poll_interval": 2,
     "allowed_sizes": [
         "832x1216",
@@ -177,6 +180,17 @@ def edit(args) -> None:
     )
 
 
+def generate(args) -> None:
+    """Generate an image from text through the local PE workflow."""
+    prompt = str(args.prompt or "").strip()
+    if not prompt:
+        result({"ok": False, "error": "missing_prompt", "message": "缺少提示词"})
+        return
+    result(
+        run_cli_action(lambda: t2i_payload(load_config(), IMAGE_OUTPUTS, args, prompt))
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="AstrBot Qwen-Image 助手")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -195,7 +209,16 @@ def main() -> None:
     p.add_argument("--cfg", type=float)
     p.add_argument("--seed", type=int)
     p.add_argument("--negative-prompt")
+    p.add_argument("--raw", action="store_true")
     p.set_defaults(func=edit)
+
+    p = sub.add_parser("generate")
+    p.add_argument("--prompt", required=True)
+    p.add_argument("--steps", type=int)
+    p.add_argument("--cfg", type=float)
+    p.add_argument("--seed", type=int)
+    p.add_argument("--raw", action="store_true")
+    p.set_defaults(func=generate)
 
     args = parser.parse_args()
     args.func(args)

@@ -5,9 +5,8 @@ Two sources can produce the edit graph:
 - Built-in ``qwen21_edit`` graph (validated against the local ComfyUI).
 - User-supplied ComfyUI API-format JSON (custom workflow mode).
 
-Custom graphs must honor the binding contract documented in `custom contract`
-below. Future text-to-image support plugs into `build_edit_workflow` as a new
-workflow name (e.g. ``qwen21_t2i``) without changing callers.
+Custom graphs must honor the binding contract documented below. Built-in
+generation routes raw user requests through local Qwen PE GGUF nodes.
 """
 
 from __future__ import annotations
@@ -16,6 +15,11 @@ import copy
 import json
 from pathlib import Path
 from typing import Any
+
+try:
+    from .comfyui_sizes import resolve_output_size
+except ImportError:  # pragma: no cover - direct CLI import.
+    from comfyui_sizes import resolve_output_size
 
 #: Chat-side limit; ``TextEncodeQwenImage21`` supports these image slots.
 MAX_EDIT_IMAGES = 3
@@ -35,6 +39,7 @@ def qwen21_edit_workflow(
     seed: int,
     negative_prompt: str = "",
     output_size: tuple[int, int] | None = None,
+    use_pe: bool = True,
 ) -> dict[str, Any]:
     """Build the API graph of the validated two-image reference workflow.
 
@@ -99,7 +104,7 @@ def qwen21_edit_workflow(
     }
     edit_inputs: dict[str, Any] = {
         "clip": ["453", 0],
-        "prompt": prompt,
+        "prompt": ["487", 0] if use_pe else prompt,
         "negative_prompt": negative_prompt,
         "resolution": 0,
         "vae": ["454", 0],
@@ -107,6 +112,7 @@ def qwen21_edit_workflow(
     # Cap references at 1 MiP by default; the first image also determines the
     # output latent when no explicit output size is configured.
     limit_image_megapixels = bool(config.get("limit_image_megapixels", True))
+    pe_images: dict[str, Any] = {}
     for index, name in enumerate(names, start=1):
         load_id = ("470", "475", "490")[index - 1]
         size_id = ("483", "484", "491")[index - 1]
@@ -115,6 +121,7 @@ def qwen21_edit_workflow(
         graph[load_id] = {"class_type": "LoadImage", "inputs": {"image": name}}
         if not limit_image_megapixels:
             edit_inputs[f"images.image_{index}"] = [load_id, 0]
+            pe_images[f"image_{index}"] = [load_id, 0]
             continue
         graph[size_id] = {
             "class_type": "GetImageSize",
@@ -139,6 +146,29 @@ def qwen21_edit_workflow(
             },
         }
         edit_inputs[f"images.image_{index}"] = [scale_id, 0]
+        pe_images[f"image_{index}"] = [scale_id, 0]
+
+    if use_pe:
+        graph["487"] = {
+            "class_type": "QwenPEGGUF_Edit",
+            "inputs": {
+                "prompt": prompt,
+                "model_file": config.get(
+                    "pe_edit_model", "pe-i2i/pe_i2i_heretic-Q4_K_M.gguf"
+                ),
+                "server_url": config.get("pe_server_url", "http://127.0.0.1:8189"),
+                "auto_start": True,
+                "port": int(config.get("pe_port", 8189)),
+                "context_size": 16384,
+                "gpu_layers": 99,
+                "temperature": 1.0,
+                "top_p": 0.95,
+                "presence_penalty": 0.0,
+                "max_new_tokens": int(config.get("pe_edit_max_tokens", 12288)),
+                "seed": seed,
+                **pe_images,
+            },
+        }
 
     graph["474"] = {"class_type": "TextEncodeQwenImage21", "inputs": edit_inputs}
     graph["458"] = {
@@ -188,6 +218,7 @@ def build_edit_workflow(
     seed: int,
     negative_prompt: str = "",
     output_size: tuple[int, int] | None = None,
+    use_pe: bool = True,
 ) -> dict[str, Any]:
     """Build the effective edit graph (built-in or custom).
 
@@ -210,6 +241,8 @@ def build_edit_workflow(
         ValueError: Unknown workflow name or invalid custom graph.
     """
     if bool(config.get("custom_workflow_enabled", False)):
+        if use_pe:
+            raise ValueError("custom_edit_workflow_requires_raw_mode")
         return custom_qwen_edit_workflow(
             config, prompt, image_names, steps, cfg, seed, negative_prompt
         )
@@ -217,8 +250,146 @@ def build_edit_workflow(
     if workflow_name not in BUILTIN_EDIT_WORKFLOWS:
         raise ValueError(f"unsupported_workflow: {workflow_name}")
     return qwen21_edit_workflow(
-        config, prompt, image_names, steps, cfg, seed, negative_prompt, output_size
+        config,
+        prompt,
+        image_names,
+        steps,
+        cfg,
+        seed,
+        negative_prompt,
+        output_size,
+        use_pe,
     )
+
+
+def qwen21_t2i_workflow(
+    config: dict[str, Any],
+    prompt: str,
+    steps: int,
+    cfg: float,
+    seed: int,
+    use_pe: bool = True,
+) -> dict[str, Any]:
+    """Build a text-to-image API graph with local PE and configured canvas.
+
+    Args:
+        config: Plugin configuration and installed model filenames.
+        prompt: Original user request, or a finished prompt in raw mode.
+        steps: Qwen sampling steps.
+        cfg: Qwen guidance scale.
+        seed: Per-task random seed.
+        use_pe: Whether to run the local T2I prompt enhancer.
+
+    Returns:
+        ComfyUI API prompt graph.
+    """
+    graph: dict[str, Any] = {
+        "451": {
+            "class_type": "UNETLoader",
+            "inputs": {
+                "unet_name": config.get(
+                    "unet_name", "qwen_image_2.1_nvfp4.safetensors"
+                ),
+                "weight_dtype": "default",
+            },
+        },
+        "453": {
+            "class_type": "CLIPLoader",
+            "inputs": {
+                "clip_name": config.get(
+                    "clip_name", "qwen3vl_8b_nvfp4_heretic.safetensors"
+                ),
+                "type": "qwen_image",
+                "device": "default",
+            },
+        },
+        "454": {
+            "class_type": "VAELoader",
+            "inputs": {
+                "vae_name": config.get(
+                    "vae_name", "qwen_image_2.1_vae_bf16.safetensors"
+                ),
+            },
+        },
+        "452": {
+            "class_type": "TextEncodeQwenImage21",
+            "inputs": {
+                "clip": ["453", 0],
+                "prompt": ["470", 0] if use_pe else prompt,
+                "negative_prompt": "",
+                "resolution": 1024,
+            },
+        },
+        "456": {
+            "class_type": "EmptyLatentImage",
+            "inputs": {
+                "width": 896,
+                "height": 1152,
+                "batch_size": 1,
+            },
+        },
+        "458": {
+            "class_type": "KSampler",
+            "inputs": {
+                "model": ["451", 0],
+                "positive": ["452", 0],
+                "negative": ["452", 1],
+                "latent_image": ["456", 0],
+                "seed": seed,
+                "steps": steps,
+                "cfg": cfg,
+                "sampler_name": config.get("sampler_name", "euler"),
+                "scheduler": config.get("scheduler", "simple"),
+                "denoise": 1.0,
+            },
+        },
+        "457": {
+            "class_type": "VAEDecode",
+            "inputs": {
+                "samples": ["458", 0],
+                "vae": ["454", 0],
+            },
+        },
+        "461": {
+            "class_type": "SaveImageAdvanced",
+            "inputs": {
+                "images": ["457", 0],
+                "filename_prefix": "astrbot/qwen_t2i",
+                "format": "png",
+                "format.bit_depth": "8-bit",
+                "format.input_color_space": "sRGB",
+            },
+        },
+    }
+    if use_pe:
+        graph["470"] = {
+            "class_type": "QwenPEGGUF_T2I",
+            "inputs": {
+                "prompt": prompt,
+                "model_file": config.get(
+                    "pe_t2i_model", "pe-t2i/pe_t2i_heretic-Q4_K_M.gguf"
+                ),
+                "server_url": config.get("pe_server_url", "http://127.0.0.1:8189"),
+                "auto_start": True,
+                "port": int(config.get("pe_port", 8189)),
+                "context_size": 16384,
+                "gpu_layers": 99,
+                "temperature": 1.0,
+                "top_p": 0.95,
+                "top_k": 20,
+                "presence_penalty": 1.5,
+                "max_new_tokens": int(config.get("pe_t2i_max_tokens", 8192)),
+                "seed": seed,
+            },
+        }
+    size_config = {
+        "single_image_size_mode": "configured",
+        "output_aspect": config.get("t2i_aspect", "3:4"),
+        "output_megapixels": config.get("t2i_megapixels", 1.0),
+    }
+    size = resolve_output_size(size_config, 1) or (896, 1152)
+    graph["456"]["inputs"].update({"width": size[0], "height": size[1]})
+    return graph
 
 
 def custom_workflow_source(config: dict[str, Any]) -> tuple[str, dict[str, Any]]:

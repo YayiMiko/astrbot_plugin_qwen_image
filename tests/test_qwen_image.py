@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 import sys
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
@@ -26,6 +27,7 @@ from agent_tools.comfyui_workflows import (  # noqa: E402
     custom_workflow_source,
     describe_custom_workflow,
     qwen21_edit_workflow,
+    qwen21_t2i_workflow,
 )
 from command_router import (  # noqa: E402
     help_text,
@@ -77,6 +79,19 @@ def _config(**overrides):
     return base
 
 
+def test_workflow_imports_as_plugin_package() -> None:
+    """AstrBot imports the plugin as a package, unlike the standalone CLI."""
+    code = (
+        "import sys; "
+        f"sys.path.insert(0, {str(PLUGIN_DIR.parent)!r}); "
+        "import astrbot_plugin_qwen_image.agent_tools.comfyui_workflows"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", code], capture_output=True, text=True
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_edit_workflow_matches_validated_graph() -> None:
     workflow = qwen21_edit_workflow(
         _config(), "Keep everything.", ["target.png"], 25, 1.0, 42
@@ -107,7 +122,10 @@ def test_edit_workflow_matches_validated_graph() -> None:
     assert workflow["477"]["inputs"]["megapixels"] == ["485", 0]
     assert workflow["474"]["class_type"] == "TextEncodeQwenImage21"
     assert workflow["474"]["inputs"]["images.image_1"] == ["477", 0]
-    assert workflow["474"]["inputs"]["prompt"] == "Keep everything."
+    assert workflow["474"]["inputs"]["prompt"] == ["487", 0]
+    assert workflow["487"]["class_type"] == "QwenPEGGUF_Edit"
+    assert workflow["487"]["inputs"]["prompt"] == "Keep everything."
+    assert workflow["487"]["inputs"]["image_1"] == ["477", 0]
     assert workflow["474"]["inputs"]["vae"] == ["454", 0]
     assert workflow["474"]["inputs"]["negative_prompt"] == ""
     sampler = workflow["458"]["inputs"]
@@ -207,7 +225,7 @@ def test_cli_agent_flattens_qwen_grouped_config() -> None:
     assert "qwen_models" not in flat
 
 
-def test_hard_route_edit_and_t2i_stub() -> None:
+def test_hard_route_edit_and_t2i() -> None:
     assert parse_hard_route("/qwen 改图 让图一换上红裙") == (
         "edit",
         "让图一换上红裙",
@@ -217,7 +235,8 @@ def test_hard_route_edit_and_t2i_stub() -> None:
         "为图中角色穿上吸血鬼贵族礼服",
     )
     assert parse_hard_route("/qwen 换装 图二的衣服") == ("edit", "图二的衣服")
-    assert parse_hard_route("/qwen 生图 一只猫") == ("t2i_stub", "一只猫")
+    assert parse_hard_route("/qwen 生图 一只猫") == ("generate", "一只猫")
+    assert parse_hard_route("用qwen生图一只猫") is None
     assert parse_hard_route("/qwen 状态") == ("status", "")
     assert parse_hard_route("/qwen") == ("help", "")
     # Other plugins' prefixes must not be captured.
@@ -248,10 +267,30 @@ def test_slot_command_routes() -> None:
     assert "改图" in text and "编辑" in text
 
 
-def test_help_mentions_edit_and_t2i_unavailable() -> None:
+def test_help_mentions_edit_and_local_pe_t2i() -> None:
     text = help_text(True)
     assert "/qwen 改图" in text
-    assert "文生图正在开发中" in text or "开发中" in text
+    assert "本地 PE" in text
+
+
+def test_t2i_pe_and_raw_graphs() -> None:
+    pe = qwen21_t2i_workflow(_config(), "a mountain", 25, 1.0, 42)
+    assert pe["470"]["class_type"] == "QwenPEGGUF_T2I"
+    assert pe["470"]["inputs"]["prompt"] == "a mountain"
+    assert pe["452"]["inputs"]["prompt"] == ["470", 0]
+    assert "471" not in pe
+    assert pe["456"]["inputs"]["height"] > pe["456"]["inputs"]["width"]
+    raw = qwen21_t2i_workflow(
+        _config(t2i_aspect="16:9", t2i_megapixels=1.0),
+        "a mountain",
+        25,
+        1.0,
+        42,
+        use_pe=False,
+    )
+    assert "470" not in raw and "471" not in raw
+    assert raw["452"]["inputs"]["prompt"] == "a mountain"
+    assert raw["456"]["inputs"]["width"] > raw["456"]["inputs"]["height"]
 
 
 def test_strip_raw_prefix() -> None:

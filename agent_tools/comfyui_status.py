@@ -112,6 +112,16 @@ def build_status_payload(
                         "PrimitiveFloat",
                         "SaveImageAdvanced",
                         "EmptyLatentImage",
+                        "QwenPEGGUF_Edit",
+                    )
+                ),
+                "qwen_t2i_available": all(
+                    node in object_info
+                    for node in (
+                        "TextEncodeQwenImage21",
+                        "SaveImageAdvanced",
+                        "EmptyLatentImage",
+                        "QwenPEGGUF_T2I",
                     )
                 ),
                 "comfyui_api_reachable": True,

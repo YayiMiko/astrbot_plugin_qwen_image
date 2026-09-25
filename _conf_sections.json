@@ -56,15 +56,27 @@
       ]
     },
     {
-      "key": "qwen_prompting",
-      "description": "提示词改写",
-      "hint": "Qwen-Image-2.1 使用自然语言描述而非 tag 串；改写器会把中文需求改写成一段英文画面描述，并套上“保持/修改”骨架。",
+      "key": "qwen_pe",
+      "description": "本地 PE 提示词增强",
+      "hint": "由 ComfyUI 所在机器上的 PE GGUF 增强，不调用 AstrBot 聊天模型。",
       "items": [
-        "prompt_optimize_enabled",
-        "prompt_builder_provider_id",
-        "prompt_builder_max_tokens",
-        "prompt_mode",
-        "prompt_rewrite_system_prompt"
+        "pe_server_url",
+        "pe_port",
+        "pe_t2i_model",
+        "pe_edit_model",
+        "pe_t2i_max_tokens",
+        "pe_edit_max_tokens"
+      ]
+    },
+    {
+      "key": "qwen_generation",
+      "description": "文生图",
+      "hint": "只响应显式 /qwen 生图；由本地 PE 自动扩写，不指定默认画风。",
+      "items": [
+        "t2i_enabled",
+        "t2i_steps",
+        "t2i_aspect",
+        "t2i_megapixels"
       ]
     },
     {

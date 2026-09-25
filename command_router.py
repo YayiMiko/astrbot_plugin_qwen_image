@@ -16,7 +16,8 @@ def help_text(img2img_enabled: bool = False) -> str:
     lines = [
         "Qwen 指令表：",
         "- /qwen 状态：查看 ComfyUI / Qwen-Image-2.1 状态",
-        "- /qwen 生图 <描述>：文生图正在开发中，暂不可用",
+        "- /qwen 生图 <描述>：用本地 PE 扩写并文生图",
+        "- 在描述前加 原样 或 无优化：跳过 PE，直接使用提示词",
         "- /qwen 记图：把本条带的图/引用的图记为参考图1/2/3（最多 3 张，30 分钟有效）",
         "- /qwen 看图：查看已标记的参考图",
         "- /qwen 清图：清空已标记的参考图",
@@ -88,10 +89,10 @@ def parse_hard_route(text: str) -> tuple[str, str] | None:
             ("debug", "debug_status"),
             ("调试状态", "debug_status"),
             ("调试", "debug_status"),
-            ("generate", "t2i_stub"),
-            ("生图", "t2i_stub"),
-            ("画图", "t2i_stub"),
-            ("文生图", "t2i_stub"),
+            ("generate", "generate"),
+            ("生图", "generate"),
+            ("画图", "generate"),
+            ("文生图", "generate"),
             ("edit", "edit"),
             ("编辑", "edit"),
             ("改编", "edit"),
@@ -120,7 +121,7 @@ def parse_hard_route(text: str) -> tuple[str, str] | None:
             prompt = rest[len(keyword) :].strip(" ，,：:")
             return action, prompt
         # Bare "/qwen <text>" with an image attached is treated as an edit
-        # request; without an image it falls through to the T2I stub.
+        # request; generation requires an explicit subcommand.
         return "edit", rest
 
     natural = re.match(
@@ -152,4 +153,4 @@ def parse_hard_route(text: str) -> tuple[str, str] | None:
         return "show_slots", prompt
     if verb in {"清图", "清除标记"}:
         return "clear_slots", prompt
-    return "t2i_stub", prompt
+    return None

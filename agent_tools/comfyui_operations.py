@@ -8,7 +8,11 @@ from typing import Any
 from comfyui_history import ComfyUIHistoryRunner, history_failed
 from comfyui_http import ComfyUIHttpClient
 from comfyui_sizes import resolve_output_size
-from comfyui_workflows import MAX_EDIT_IMAGES, build_edit_workflow
+from comfyui_workflows import (
+    MAX_EDIT_IMAGES,
+    build_edit_workflow,
+    qwen21_t2i_workflow,
+)
 from PIL import Image, ImageOps
 
 
@@ -41,7 +45,15 @@ def edit_payload(
     output_size = resolve_output_size(config, len(kept))
     try:
         prompt_body = build_edit_workflow(
-            config, prompt, uploaded, steps, cfg, seed, negative_prompt, output_size
+            config,
+            prompt,
+            uploaded,
+            steps,
+            cfg,
+            seed,
+            negative_prompt,
+            output_size,
+            use_pe=not bool(args.raw),
         )
     except ValueError as exc:
         return {
@@ -64,6 +76,7 @@ def edit_payload(
     return {
         "ok": bool(outputs),
         "operation": "qwen_edit",
+        "prompt_engine": "raw" if args.raw else "local_pe_i2i",
         "prompt_id": prompt_id,
         "inputs": [str(path) for path in kept],
         "uploaded_images": uploaded,
@@ -72,6 +85,51 @@ def edit_payload(
         "steps": steps,
         "cfg": cfg,
         "output_size": list(output_size) if output_size else None,
+        "outputs": [str(path) for path in outputs],
+        "raw_image_count": raw_image_count,
+        "error": None if outputs else "no image found in history",
+    }
+
+
+def t2i_payload(
+    config: dict[str, Any], image_outputs: Path, args: Any, prompt: str
+) -> dict[str, Any]:
+    """Submit a text-to-image task with its local PE stage in ComfyUI.
+
+    Args:
+        config: Plugin configuration.
+        image_outputs: Directory for downloaded outputs.
+        args: CLI options including raw mode and sampling overrides.
+        prompt: User request or a finished raw prompt.
+
+    Returns:
+        Generation payload for chat delivery and task recording.
+    """
+    steps = int(args.steps or config.get("t2i_steps", 25))
+    cfg = float(args.cfg or config.get("cfg", 1.0))
+    seed = int(args.seed if args.seed is not None else random.randint(1, 2**32 - 1))
+    graph = qwen21_t2i_workflow(
+        config, prompt, steps, cfg, seed, use_pe=not bool(args.raw)
+    )
+    prompt_id, history = _run_prompt(config, image_outputs, graph)
+    status_payload = history_failed(history)
+    if status_payload:
+        return {
+            "ok": False,
+            "operation": "qwen_t2i",
+            "error": "workflow_failed",
+            "prompt_id": prompt_id,
+            "status": status_payload,
+        }
+    outputs, raw_image_count = _save_history_images(config, image_outputs, history)
+    return {
+        "ok": bool(outputs),
+        "operation": "qwen_t2i",
+        "prompt_id": prompt_id,
+        "prompt_engine": "raw" if args.raw else "local_pe_t2i",
+        "seed": seed,
+        "steps": steps,
+        "cfg": cfg,
         "outputs": [str(path) for path in outputs],
         "raw_image_count": raw_image_count,
         "error": None if outputs else "no image found in history",
